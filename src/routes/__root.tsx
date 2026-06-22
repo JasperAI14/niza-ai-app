@@ -77,14 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Nova Mind Ai" },
+      { name: "description", content: "NovaMind AI is a full-stack web application that acts as a unified AI assistant." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Nova Mind Ai" },
+      { property: "og:description", content: "NovaMind AI is a full-stack web application that acts as a unified AI assistant." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Nova Mind Ai" },
+      { name: "twitter:description", content: "NovaMind AI is a full-stack web application that acts as a unified AI assistant." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/b53049d1-5240-4c4b-bc15-572436f88f6a/id-preview-dd3ecc20--4efc0171-0468-4a14-9bd5-92030e5b5d2f.lovable.app-1782147106141.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/b53049d1-5240-4c4b-bc15-572436f88f6a/id-preview-dd3ecc20--4efc0171-0468-4a14-9bd5-92030e5b5d2f.lovable.app-1782147106141.png" },
     ],
     links: [
       {
