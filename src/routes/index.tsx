@@ -1,29 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { NovaMindApp } from "@/components/NovaMindApp";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Your App" },
-      { name: "description", content: "Replace this with a one-sentence description of your app." },
-      { property: "og:title", content: "Your App" },
-      { property: "og:description", content: "Replace this with a one-sentence description of your app." },
+      { title: "NovaMind AI — Chat, Code, and Image Generation" },
+      {
+        name: "description",
+        content:
+          "NovaMind AI is an advanced assistant for natural chat, coding help, debugging, and AI image generation.",
+      },
+      { property: "og:title", content: "NovaMind AI" },
+      {
+        property: "og:description",
+        content:
+          "An advanced AI assistant for chat, coding, and image generation.",
+      },
     ],
   }),
-  component: Index,
+  component: NovaMindApp,
 });
-
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
