@@ -14,7 +14,116 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+          role: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          role: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          role?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          plan: string
+          promo_used: boolean
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id: string
+          plan?: string
+          promo_used?: boolean
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          plan?: string
+          promo_used?: boolean
+        }
+        Relationships: []
+      }
+      threads: {
+        Row: {
+          created_at: string
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      usage: {
+        Row: {
+          image_count: number
+          image_window_start: string
+          text_count: number
+          text_window_start: string
+          user_id: string
+        }
+        Insert: {
+          image_count?: number
+          image_window_start?: string
+          text_count?: number
+          text_window_start?: string
+          user_id: string
+        }
+        Update: {
+          image_count?: number
+          image_window_start?: string
+          text_count?: number
+          text_window_start?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
