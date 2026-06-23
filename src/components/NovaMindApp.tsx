@@ -1,163 +1,176 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { Plus, Send, Trash2, MessageSquare, Menu, LogOut, Sparkles, Film } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import {
-  deriveTitle,
-  loadThreads,
-  newThread,
-  saveThreads,
-  type ChatMessage as Msg,
-  type Thread,
-} from "@/lib/chat-store";
-import { ChatMessage } from "./ChatMessage";
-import { Plus, Send, Trash2, Image as ImageIcon, MessageSquare, Menu } from "lucide-react";
+  createThread,
+  deleteThread as deleteThreadFn,
+  getMe,
+  getThreadMessages,
+  listThreads,
+  sendMessage,
+  type DBMessage,
+} from "@/lib/chat.functions";
+import { ChatMessage, type UIMessage } from "./ChatMessage";
 
-function initialState(): { threads: Thread[]; activeId: string } {
-  const existing = loadThreads();
-  if (existing.length > 0) {
-    return { threads: existing, activeId: existing[0].id };
-  }
-  const t = newThread();
-  return { threads: [t], activeId: t.id };
-}
+const SAMPLES = [
+  "Explain async/await in JavaScript",
+  "Write a Python script to rename files",
+  "Debug: why isn't my React state updating?",
+  "A picture of a serene mountain lake at sunrise",
+];
 
 export function NovaMindApp() {
-  const [{ threads, activeId }, setState] = useState<{
-    threads: Thread[];
-    activeId: string;
-  }>(() => {
-    if (typeof window === "undefined") {
-      const t = newThread();
-      return { threads: [t], activeId: t.id };
-    }
-    return initialState();
-  });
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const fetchThreads = useServerFn(listThreads);
+  const fetchMe = useServerFn(getMe);
+  const fetchMessages = useServerFn(getThreadMessages);
+  const newThreadFn = useServerFn(createThread);
+  const removeThreadFn = useServerFn(deleteThreadFn);
+  const sendFn = useServerFn(sendMessage);
+
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [optimistic, setOptimistic] = useState<UIMessage[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    saveThreads(threads);
-  }, [threads]);
+  const meQ = useQuery({ queryKey: ["me"], queryFn: () => fetchMe() });
+  const threadsQ = useQuery({ queryKey: ["threads"], queryFn: () => fetchThreads() });
+  const messagesQ = useQuery({
+    queryKey: ["messages", activeId],
+    queryFn: () => fetchMessages({ data: { threadId: activeId! } }),
+    enabled: !!activeId,
+  });
 
-  const active = useMemo(
-    () => threads.find((t) => t.id === activeId) ?? threads[0],
-    [threads, activeId],
-  );
-
+  // Pick first thread by default
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [activeId]);
+    if (!activeId && threadsQ.data && threadsQ.data.length > 0) {
+      setActiveId(threadsQ.data[0].id);
+    }
+  }, [threadsQ.data, activeId]);
+
+  // Reset optimistic when thread changes / server data lands
+  useEffect(() => {
+    setOptimistic([]);
+  }, [activeId, messagesQ.data]);
+
+  const messages = useMemo<UIMessage[]>(() => {
+    const base: UIMessage[] = (messagesQ.data ?? []).map((m: DBMessage) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      image_url: m.image_url,
+    }));
+    return [...base, ...optimistic];
+  }, [messagesQ.data, optimistic]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [active?.messages.length, loading]);
+  }, [messages.length]);
 
-  function updateActive(updater: (t: Thread) => Thread) {
-    setState((s) => ({
-      ...s,
-      threads: s.threads.map((t) => (t.id === s.activeId ? updater(t) : t)),
-    }));
-  }
-
-  function createThread() {
-    const t = newThread();
-    setState((s) => ({ threads: [t, ...s.threads], activeId: t.id }));
-    setSidebarOpen(false);
-  }
-
-  function selectThread(id: string) {
-    setState((s) => ({ ...s, activeId: id }));
-    setSidebarOpen(false);
-  }
-
-  function deleteThread(id: string) {
-    setState((s) => {
-      const remaining = s.threads.filter((t) => t.id !== id);
-      if (remaining.length === 0) {
-        const t = newThread();
-        return { threads: [t], activeId: t.id };
-      }
-      const activeId = s.activeId === id ? remaining[0].id : s.activeId;
-      return { threads: remaining, activeId };
-    });
-  }
-
-  async function send() {
-    const text = input.trim();
-    if (!text || loading || !active) return;
-    setInput("");
-    setLoading(true);
-
-    const userMsg: Msg = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: text,
-      createdAt: Date.now(),
-    };
-
-    const isImage = /^(generate image:|\/image\s+|imagine\s+)/i.test(text);
-    const prompt = text.replace(/^(generate image:|\/image\s+|imagine\s+)/i, "").trim();
-
-    const baseMessages = [...active.messages, userMsg];
-    updateActive((t) => ({
-      ...t,
-      messages: baseMessages,
-      title: t.messages.length === 0 ? deriveTitle(text) : t.title,
-      updatedAt: Date.now(),
-    }));
-
-    try {
-      if (isImage) {
-        const res = await fetch("/api/image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
-        });
-        const data = await res.json();
-        const assistant: Msg = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.image ? `Here's your image for: *${prompt}*` : (data.error ?? "Image generation failed. Please try again."),
-          image: data.image,
-          createdAt: Date.now(),
-        };
-        updateActive((t) => ({ ...t, messages: [...baseMessages, assistant], updatedAt: Date.now() }));
-      } else {
-        const history = baseMessages.map((m) => ({ role: m.role, content: m.content }));
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: history }),
-        });
-        const data = await res.json();
-        const assistant: Msg = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.reply ?? data.error ?? "AI is currently unavailable. Please try again.",
-          createdAt: Date.now(),
-        };
-        updateActive((t) => ({ ...t, messages: [...baseMessages, assistant], updatedAt: Date.now() }));
-      }
-    } catch {
-      const assistant: Msg = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "AI is currently unavailable. Please try again.",
-        createdAt: Date.now(),
-      };
-      updateActive((t) => ({ ...t, messages: [...baseMessages, assistant], updatedAt: Date.now() }));
-    } finally {
-      setLoading(false);
+  const createMut = useMutation({
+    mutationFn: () => newThreadFn(),
+    onSuccess: (t) => {
+      qc.setQueryData(["threads"], (old: any) => [t, ...(old ?? [])]);
+      setActiveId(t.id);
+      setSidebarOpen(false);
       setTimeout(() => inputRef.current?.focus(), 0);
-    }
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => removeThreadFn({ data: { threadId: id } }),
+    onSuccess: (_d, id) => {
+      qc.setQueryData(["threads"], (old: any) => (old ?? []).filter((t: any) => t.id !== id));
+      if (activeId === id) setActiveId(null);
+    },
+  });
+
+  const sendMut = useMutation({
+    mutationFn: async (content: string) => {
+      let tid = activeId;
+      if (!tid) {
+        const t = await newThreadFn();
+        qc.setQueryData(["threads"], (old: any) => [t, ...(old ?? [])]);
+        setActiveId(t.id);
+        tid = t.id;
+      }
+      const userMsg: UIMessage = { id: "u-" + crypto.randomUUID(), role: "user", content };
+      const pending: UIMessage = { id: "p-" + crypto.randomUUID(), role: "assistant", content: "…" };
+      setOptimistic([userMsg, pending]);
+      const res = await sendFn({ data: { threadId: tid, content } });
+      return { res, tid };
+    },
+    onSuccess: async ({ res, tid }) => {
+      if (!res.ok && res.kind === "limit") {
+        toast.error(res.message);
+        setOptimistic([]);
+        return;
+      }
+      // refresh messages, threads (title may have changed), and usage
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["messages", tid] }),
+        qc.invalidateQueries({ queryKey: ["threads"] }),
+        qc.invalidateQueries({ queryKey: ["me"] }),
+      ]);
+      setOptimistic([]);
+    },
+    onError: () => {
+      toast.error("Something went wrong. Please try again.");
+      setOptimistic([]);
+    },
+  });
+
+  // Usage warnings
+  const usage = meQ.data?.usage;
+  useEffect(() => {
+    if (!usage) return;
+    const textPct = usage.text_count / usage.text_limit;
+    const imgPct = usage.image_count / usage.image_limit;
+    if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
+    else if (textPct >= 0.7 && textPct < 0.9) toast(`Heads up: text usage at ${Math.round(textPct * 100)}%`);
+    if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
+  }, [usage?.text_count, usage?.image_count]);
+
+  async function handleSend() {
+    const text = input.trim();
+    if (!text || sendMut.isPending) return;
+    setInput("");
+    sendMut.mutate(text);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send();
+      handleSend();
     }
+  }
+
+  async function signOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
+  const plan = meQ.data?.profile.plan ?? "free";
+  const textPct = usage ? Math.min(100, Math.round((usage.text_count / usage.text_limit) * 100)) : 0;
+  const imgPct = usage ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100)) : 0;
+  const textBlocked = !!usage && usage.text_count >= usage.text_limit;
+  const imgBlocked = !!usage && usage.image_count >= usage.image_limit;
+  const inputBlocked = textBlocked && imgBlocked;
+
+  function barColor(pct: number) {
+    if (pct >= 100) return "bg-destructive";
+    if (pct >= 90) return "bg-red-500";
+    if (pct >= 70) return "bg-amber-500";
+    return "bg-primary";
   }
 
   return (
@@ -175,15 +188,18 @@ export function NovaMindApp() {
             </div>
             <span className="font-semibold">NovaMind AI</span>
           </div>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${plan === "premium" ? "bg-amber-500/20 text-amber-500" : "bg-muted text-muted-foreground"}`}>
+            {plan.toUpperCase()}
+          </span>
         </div>
         <button
-          onClick={createThread}
+          onClick={() => createMut.mutate()}
           className="m-3 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-accent"
         >
           <Plus className="h-4 w-4" /> New chat
         </button>
         <div className="flex-1 overflow-y-auto px-2 pb-3">
-          {threads.map((t) => (
+          {(threadsQ.data ?? []).map((t) => (
             <div
               key={t.id}
               className={`group mb-1 flex items-center gap-2 rounded-md px-2 py-2 text-sm ${
@@ -191,14 +207,17 @@ export function NovaMindApp() {
               }`}
             >
               <button
-                onClick={() => selectThread(t.id)}
+                onClick={() => {
+                  setActiveId(t.id);
+                  setSidebarOpen(false);
+                }}
                 className="flex flex-1 items-center gap-2 truncate text-left"
               >
                 <MessageSquare className="h-4 w-4 shrink-0 opacity-70" />
                 <span className="truncate">{t.title}</span>
               </button>
               <button
-                onClick={() => deleteThread(t.id)}
+                onClick={() => deleteMut.mutate(t.id)}
                 className="opacity-0 transition-opacity group-hover:opacity-100"
                 aria-label="Delete chat"
               >
@@ -207,16 +226,47 @@ export function NovaMindApp() {
             </div>
           ))}
         </div>
-        <div className="border-t border-border p-3 text-xs text-muted-foreground">
-          Tip: start a message with <code className="rounded bg-muted px-1">generate image:</code> to create images.
-        </div>
+
+        {/* Usage panel */}
+        {usage && (
+          <div className="space-y-2 border-t border-border p-3 text-xs">
+            <div>
+              <div className="mb-1 flex justify-between">
+                <span className="text-muted-foreground">Text</span>
+                <span className="font-medium">{usage.text_count} / {usage.text_limit}</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className={`h-full transition-all ${barColor(textPct)}`} style={{ width: `${textPct}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 flex justify-between">
+                <span className="text-muted-foreground">Images</span>
+                <span className="font-medium">{usage.image_count} / {usage.image_limit}</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className={`h-full transition-all ${barColor(imgPct)}`} style={{ width: `${imgPct}%` }} />
+              </div>
+            </div>
+            {plan === "premium" && (
+              <div className="mt-2 flex items-center gap-2 rounded-md border border-dashed border-border px-2 py-2 text-muted-foreground">
+                <Film className="h-3.5 w-3.5" />
+                <span>AI Video — Coming soon</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <button
+          onClick={signOut}
+          className="m-3 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"
+        >
+          <LogOut className="h-4 w-4" /> Sign out
+        </button>
       </aside>
 
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Main */}
@@ -229,31 +279,23 @@ export function NovaMindApp() {
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
-          {!active || active.messages.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-4 text-center">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-2xl font-bold">
                 N
               </div>
               <h1 className="text-2xl font-semibold">How can I help you today?</h1>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                Chat, code, debug, or generate images. Try asking a question or start with{" "}
-                <code className="rounded bg-muted px-1">generate image: a neon city at night</code>.
+                Ask me anything — code, ideas, explanations, or describe a picture you'd like me to create.
               </p>
               <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
-                {[
-                  "Explain async/await in JavaScript",
-                  "Write a Python script to rename files",
-                  "Debug: why is my React state not updating?",
-                  "generate image: a serene mountain lake at sunrise",
-                ].map((s) => (
+                {SAMPLES.map((s) => (
                   <button
                     key={s}
                     onClick={() => setInput(s)}
                     className="rounded-lg border border-border bg-card p-3 text-left text-sm hover:bg-accent"
                   >
-                    {s.startsWith("generate image:") && (
-                      <ImageIcon className="mb-1 inline h-4 w-4 text-primary" />
-                    )}
+                    <Sparkles className="mb-1 inline h-4 w-4 text-primary" />
                     <div>{s}</div>
                   </button>
                 ))}
@@ -261,28 +303,19 @@ export function NovaMindApp() {
             </div>
           ) : (
             <div className="pb-4">
-              {active.messages.map((m) => (
+              {messages.map((m) => (
                 <ChatMessage key={m.id} message={m} />
               ))}
-              {loading && (
-                <div className="w-full bg-muted/30 py-6">
-                  <div className="mx-auto flex max-w-3xl gap-4 px-4">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent text-xs font-semibold">
-                      AI
-                    </div>
-                    <div className="flex items-center gap-1 pt-2">
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground" />
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
 
         <div className="border-t border-border bg-background p-3 md:p-4">
+          {inputBlocked && (
+            <div className="mx-auto mb-2 max-w-3xl rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
+              You've reached your usage limit. It will reset automatically.
+            </div>
+          )}
           <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring">
             <textarea
               ref={inputRef}
@@ -292,11 +325,11 @@ export function NovaMindApp() {
               placeholder="Message NovaMind AI…"
               rows={1}
               className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
-              disabled={loading}
+              disabled={sendMut.isPending || inputBlocked}
             />
             <button
-              onClick={send}
-              disabled={loading || !input.trim()}
+              onClick={handleSend}
+              disabled={sendMut.isPending || !input.trim() || inputBlocked}
               className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition disabled:opacity-40 hover:opacity-90"
               aria-label="Send"
             >
