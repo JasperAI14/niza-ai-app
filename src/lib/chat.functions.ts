@@ -247,11 +247,38 @@ async function callLovableImage(prompt: string): Promise<ArrayBuffer> {
   return bytes.buffer;
 }
 
+async function callOpenAIImage(prompt: string): Promise<ArrayBuffer> {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("no openai key");
+  const r = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-image-1",
+      prompt,
+      size: "1024x1024",
+      n: 1,
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`openai img ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("openai img empty");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
   const providers: Array<{ name: string; fn: (p: string) => Promise<ArrayBuffer> }> = [
     { name: "stability", fn: callStability },
     { name: "huggingface", fn: callHuggingFaceImage },
     { name: "lovable", fn: callLovableImage },
+    { name: "openai", fn: callOpenAIImage },
   ];
   let lastErr: any = null;
   for (const p of providers) {
