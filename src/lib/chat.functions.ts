@@ -183,12 +183,16 @@ async function callStability(prompt: string): Promise<ArrayBuffer> {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("output_format", "png");
+  form.append("aspect_ratio", "1:1");
   const r = await fetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, Accept: "image/*" },
     body: form,
   });
-  if (!r.ok) throw new Error("stability " + r.status);
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`stability ${r.status} ${txt.slice(0, 200)}`);
+  }
   return r.arrayBuffer();
 }
 
