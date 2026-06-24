@@ -12,8 +12,10 @@ import {
   getThreadMessages,
   listThreads,
   sendMessage,
+  regenerateImage,
   type DBMessage,
 } from "@/lib/chat.functions";
+import { detectImageRequest } from "@/lib/intent";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 
 const SAMPLES = [
@@ -32,6 +34,7 @@ export function NovaMindApp() {
   const newThreadFn = useServerFn(createThread);
   const removeThreadFn = useServerFn(deleteThreadFn);
   const sendFn = useServerFn(sendMessage);
+  const regenFn = useServerFn(regenerateImage);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -101,8 +104,14 @@ export function NovaMindApp() {
         setActiveId(t.id);
         tid = t.id;
       }
+      const isImage = !!detectImageRequest(content);
       const userMsg: UIMessage = { id: "u-" + crypto.randomUUID(), role: "user", content };
-      const pending: UIMessage = { id: "p-" + crypto.randomUUID(), role: "assistant", content: "…" };
+      const pending: UIMessage = {
+        id: "p-" + crypto.randomUUID(),
+        role: "assistant",
+        content: "",
+        pending: isImage ? "image" : "text",
+      };
       setOptimistic([userMsg, pending]);
       const res = await sendFn({ data: { threadId: tid, content } });
       return { res, tid };
@@ -125,6 +134,21 @@ export function NovaMindApp() {
       toast.error("Something went wrong. Please try again.");
       setOptimistic([]);
     },
+  });
+
+  const regenMut = useMutation({
+    mutationFn: (messageId: string) => regenFn({ data: { messageId } }),
+    onSuccess: async (res) => {
+      if (!res.ok) {
+        toast.error(res.message ?? "Could not regenerate.");
+        return;
+      }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["messages", activeId] }),
+        qc.invalidateQueries({ queryKey: ["me"] }),
+      ]);
+    },
+    onError: () => toast.error("Image generation failed. Please try again later."),
   });
 
   // Usage warnings
@@ -304,7 +328,12 @@ export function NovaMindApp() {
           ) : (
             <div className="pb-4">
               {messages.map((m) => (
-                <ChatMessage key={m.id} message={m} />
+                <ChatMessage
+                  key={m.id}
+                  message={m}
+                  onRegenerate={(id) => regenMut.mutate(id)}
+                  regenerating={regenMut.isPending && regenMut.variables === m.id}
+                />
               ))}
             </div>
           )}
