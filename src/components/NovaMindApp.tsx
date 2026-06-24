@@ -12,8 +12,10 @@ import {
   getThreadMessages,
   listThreads,
   sendMessage,
+  regenerateImage,
   type DBMessage,
 } from "@/lib/chat.functions";
+import { detectImageRequest } from "@/lib/intent";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 
 const SAMPLES = [
