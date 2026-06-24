@@ -328,7 +328,12 @@ export function NovaMindApp() {
           ) : (
             <div className="pb-4">
               {messages.map((m) => (
-                <ChatMessage key={m.id} message={m} />
+                <ChatMessage
+                  key={m.id}
+                  message={m}
+                  onRegenerate={(id) => regenMut.mutate(id)}
+                  regenerating={regenMut.isPending && regenMut.variables === m.id}
+                />
               ))}
             </div>
           )}
