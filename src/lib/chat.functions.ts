@@ -476,3 +476,61 @@ export const sendMessage = createServerFn({ method: "POST" })
       assistant: { ...(inserted as any), image_url: signedImage ?? (inserted as any).image_url },
     };
   });
+
+export const regenerateImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string }) =>
+    z.object({ messageId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    // Find the assistant message and the prior user message (the prompt)
+    const { data: asst } = await supabase
+      .from("messages")
+      .select("id, thread_id, created_at, image_url")
+      .eq("id", data.messageId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!asst) throw new Error("Message not found");
+    const { data: prev } = await supabase
+      .from("messages")
+      .select("content")
+      .eq("user_id", userId)
+      .eq("thread_id", asst.thread_id)
+      .eq("role", "user")
+      .lt("created_at", asst.created_at)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!prev) throw new Error("No prompt found");
+
+    const profile = await loadProfile(supabase, userId);
+    const usage = await loadOrResetUsage(supabase, userId, profile.plan);
+    if (usage.image_count >= usage.image_limit) {
+      return { ok: false, kind: "limit" as const, message: "Image limit reached." };
+    }
+
+    try {
+      const buf = await generateImage(prev.content);
+      const path = `${userId}/${crypto.randomUUID()}.png`;
+      const { error: upErr } = await supabase.storage
+        .from("generated-images")
+        .upload(path, new Uint8Array(buf), { contentType: "image/png" });
+      if (upErr) throw upErr;
+      const { data: signed } = await supabase.storage
+        .from("generated-images")
+        .createSignedUrl(path, 60 * 60 * 6);
+      await supabase
+        .from("messages")
+        .update({ image_url: path, content: "Here's your image:" })
+        .eq("id", data.messageId);
+      await supabase
+        .from("usage")
+        .update({ image_count: usage.image_count + 1 })
+        .eq("user_id", userId);
+      return { ok: true, kind: "message" as const, image_url: signed?.signedUrl ?? null };
+    } catch (e) {
+      console.error("regen failed:", e);
+      return { ok: false, kind: "error" as const, message: "Image generation failed. Please try again later." };
+    }
+  });
