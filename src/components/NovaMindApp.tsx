@@ -136,6 +136,21 @@ export function NovaMindApp() {
     },
   });
 
+  const regenMut = useMutation({
+    mutationFn: (messageId: string) => regenFn({ data: { messageId } }),
+    onSuccess: async (res) => {
+      if (!res.ok) {
+        toast.error(res.message ?? "Could not regenerate.");
+        return;
+      }
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["messages", activeId] }),
+        qc.invalidateQueries({ queryKey: ["me"] }),
+      ]);
+    },
+    onError: () => toast.error("Image generation failed. Please try again later."),
+  });
+
   // Usage warnings
   const usage = meQ.data?.usage;
   useEffect(() => {
