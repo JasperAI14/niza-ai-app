@@ -237,10 +237,25 @@ async function callLovableImage(prompt: string): Promise<ArrayBuffer> {
       n: 1,
     }),
   });
-  if (!r.ok) throw new Error("lovable img " + r.status);
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`lovable img ${r.status} ${t.slice(0, 200)}`);
+  }
   const j = await r.json();
-  const b64 = j?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("lovable img empty");
+  const item = j?.data?.[0];
+  // Lovable returns either b64_json, url, or a data: URL string
+  let b64: string | undefined = item?.b64_json;
+  const url: string | undefined = item?.url ?? item?.image_url;
+  if (!b64 && typeof url === "string") {
+    if (url.startsWith("data:")) {
+      b64 = url.split(",")[1];
+    } else {
+      const imgR = await fetch(url);
+      if (!imgR.ok) throw new Error("lovable img fetch " + imgR.status);
+      return await imgR.arrayBuffer();
+    }
+  }
+  if (!b64) throw new Error("lovable img empty: " + JSON.stringify(j).slice(0, 200));
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -275,10 +290,10 @@ async function callOpenAIImage(prompt: string): Promise<ArrayBuffer> {
 
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
   const providers: Array<{ name: string; fn: (p: string) => Promise<ArrayBuffer> }> = [
-    { name: "stability", fn: callStability },
-    { name: "huggingface", fn: callHuggingFaceImage },
     { name: "lovable", fn: callLovableImage },
+    { name: "stability", fn: callStability },
     { name: "openai", fn: callOpenAIImage },
+    { name: "huggingface", fn: callHuggingFaceImage },
   ];
   let lastErr: any = null;
   for (const p of providers) {
