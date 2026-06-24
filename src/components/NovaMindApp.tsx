@@ -104,8 +104,14 @@ export function NovaMindApp() {
         setActiveId(t.id);
         tid = t.id;
       }
+      const isImage = !!detectImageRequest(content);
       const userMsg: UIMessage = { id: "u-" + crypto.randomUUID(), role: "user", content };
-      const pending: UIMessage = { id: "p-" + crypto.randomUUID(), role: "assistant", content: "…" };
+      const pending: UIMessage = {
+        id: "p-" + crypto.randomUUID(),
+        role: "assistant",
+        content: "",
+        pending: isImage ? "image" : "text",
+      };
       setOptimistic([userMsg, pending]);
       const res = await sendFn({ data: { threadId: tid, content } });
       return { res, tid };
