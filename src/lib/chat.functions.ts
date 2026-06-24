@@ -195,25 +195,72 @@ async function callStability(prompt: string): Promise<ArrayBuffer> {
 async function callHuggingFaceImage(prompt: string): Promise<ArrayBuffer> {
   const key = process.env.HUGGINGFACE_API_KEY;
   if (!key) throw new Error("no hf key");
-  const r = await fetch(
-    "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ inputs: prompt }),
-    },
-  );
-  if (!r.ok) throw new Error("hf img " + r.status);
-  return r.arrayBuffer();
+  // Try a couple of well-known SDXL endpoints; HF inference availability fluctuates.
+  const models = [
+    "stabilityai/stable-diffusion-xl-base-1.0",
+    "black-forest-labs/FLUX.1-schnell",
+  ];
+  let lastErr: any = null;
+  for (const m of models) {
+    try {
+      const r = await fetch(`https://api-inference.huggingface.co/models/${m}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "image/png" },
+        body: JSON.stringify({ inputs: prompt }),
+      });
+      if (!r.ok) {
+        lastErr = new Error(`hf ${m} ${r.status}`);
+        continue;
+      }
+      return await r.arrayBuffer();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr ?? new Error("hf image failed");
+}
+
+async function callLovableImage(prompt: string): Promise<ArrayBuffer> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      prompt,
+      size: "1024x1024",
+      n: 1,
+    }),
+  });
+  if (!r.ok) throw new Error("lovable img " + r.status);
+  const j = await r.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("lovable img empty");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }
 
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
-  try {
-    return await callStability(prompt);
-  } catch (e) {
-    console.error("stability failed:", (e as Error).message);
-    return await callHuggingFaceImage(prompt);
+  const providers: Array<{ name: string; fn: (p: string) => Promise<ArrayBuffer> }> = [
+    { name: "stability", fn: callStability },
+    { name: "huggingface", fn: callHuggingFaceImage },
+    { name: "lovable", fn: callLovableImage },
+  ];
+  let lastErr: any = null;
+  for (const p of providers) {
+    try {
+      const buf = await p.fn(prompt);
+      console.log(`image provider ok: ${p.name}`);
+      return buf;
+    } catch (e) {
+      lastErr = e;
+      console.error(`image provider ${p.name} failed:`, (e as Error).message);
+    }
   }
+  throw lastErr ?? new Error("all image providers failed");
 }
 
 // ---------- SERVER FUNCTIONS ----------
