@@ -34,6 +34,7 @@ export function NovaMindApp() {
   const newThreadFn = useServerFn(createThread);
   const removeThreadFn = useServerFn(deleteThreadFn);
   const sendFn = useServerFn(sendMessage);
+  const regenFn = useServerFn(regenerateImage);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
