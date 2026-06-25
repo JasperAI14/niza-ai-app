@@ -1,46 +1,63 @@
-# NovaMind AI — Full System Plan
+# Fix Image Generation (text chat untouched)
 
-## 1. Backend (Lovable Cloud)
-Enable Cloud, then create these tables (all RLS-locked to `auth.uid()`):
+## Goal
+Make image generation reliably work without touching any text/chat code path.
 
-- **profiles** — `id` (=auth.users.id), `email`, `plan` ('free'|'premium'), `promo_used` bool, `created_at`. Auto-created via trigger on signup.
-- **threads** — `id`, `user_id`, `title`, `created_at`, `updated_at`.
-- **messages** — `id`, `thread_id`, `user_id`, `role` ('user'|'assistant'), `content`, `image_url` nullable, `created_at`.
-- **usage** — `user_id` PK, `text_count`, `image_count`, `text_window_start`, `image_window_start`. Counts increment per call; reset logic in server fn.
+## Diagnosis
+Current provider chain in `src/lib/chat.functions.ts > generateImage`:
+`lovable → stability → openai → huggingface`
 
-Storage bucket `generated-images` (private), path `{user_id}/{uuid}.png`.
+From prior testing:
+- **Stability** key present but out of credits → 4xx
+- **OpenAI** key present but out of credits/quota → 4xx
+- **HuggingFace** inference API returning 530 (service unavailable on free tier for SDXL/FLUX)
+- **Lovable AI Gateway** call uses `/v1/images/generations` with `google/gemini-2.5-flash-image` — this is the correct endpoint, but the current request body and response parsing don't match the documented Gateway contract for Gemini models, so it returns empty/errors.
 
-## 2. Auth
-- Google OAuth via `lovable.auth.signInWithOAuth("google")`.
-- `/auth` page with Google button + optional "Promo Code" field (shown only when `profiles.promo_used=false`).
-- Submit promo: server fn validates code === "JASPER AI" (case-insensitive), sets `plan='premium'`, `promo_used=true`. Invalid/empty sets `promo_used=true`, stays free.
-- Routes restructured: `/auth` public, everything else under `_authenticated/`.
+Per Lovable AI Gateway docs:
+- Gemini image models require the OpenRouter chat-completions image shape (`messages` + `modalities: ["image","text"]`), NOT `prompt`. Sending `prompt` to a Gemini model returns a chat-completion text with no image data.
+- Default recommended model is `openai/gpt-image-2` with `prompt`, `quality:"low"`, `size:"1024x1024"`.
 
-## 3. Secrets
-Add via secure form: `GEMINI_API_KEY`, `HUGGINGFACE_API_KEY` (text fallback + image backup — single key unless user provides two). Reuse existing `GROK_API_KEY` (Groq) and `STABILITY_API_KEY`.
+So the Lovable call is silently failing because the body shape is wrong for the chosen model.
 
-## 4. Server functions (all `requireSupabaseAuth`)
-- `sendMessage({ threadId, content })`:
-  1. Load usage row; if window expired (text: 2h fallback timer; image: 5h), reset counter.
-  2. Detect intent: regex on verbs like "draw|paint|generate.*image|picture of|create.*image|imagine|illustration|logo" → image path.
-  3. Enforce limit (free 40 text/10 img; premium 200 text/40 img); 429 if over.
-  4. Text: try Groq `llama-3.3-70b-versatile` → Gemini `gemini-2.0-flash` → HF inference. Silent fallback.
-  5. Image: Stability core → HF `stabilityai/stable-diffusion-xl-base-1.0`. Upload to storage, store signed URL.
-  6. Insert user+assistant messages, increment usage, return reply.
-- `listThreads`, `getThread(id)`, `deleteThread(id)`, `renameThread`.
-- `getProfile`, `submitPromo({code})`, `getUsage` (live counters).
+## Plan
 
-## 5. UI
-- **Sidebar**: threads list, new chat, plan badge, usage bars (Text X/limit, Images X/limit) with color thresholds (70% amber, 90% red, 100% blocked). "AI Video — Coming soon" disabled item for premium only.
-- **Chat**: user messages right-aligned (primary bubble), AI left-aligned with avatar. Markdown + code highlighting (already wired). Inline images with download.
-- **Soft/strong toasts** at 70%/90%; input disabled with message at 100%.
-- Mobile responsive sheet sidebar.
+### 1. Validate keys (read-only check, no code change)
+Run a one-off curl from the sandbox against each provider to confirm which keys are alive:
+- Lovable Gateway: `POST /v1/images/generations` with `openai/gpt-image-2`, non-streaming, tiny prompt → expect 200 with `data[0].b64_json`.
+- OpenAI: `POST /v1/images/generations` `gpt-image-1` → check 200 vs 429/insufficient_quota.
+- Stability: `POST /v2beta/stable-image/generate/core` → check credit balance error.
+- HuggingFace: `POST` SDXL inference → check 200 vs 530.
 
-## 6. Hydration fix
-Initial state must match SSR. Move localStorage reads into `useEffect` (or rely entirely on server data via Cloud — preferred, eliminates the issue).
+Report which keys are healthy. (No file edits in this step.)
 
-## 7. Out of scope (this iteration)
-- Actual video generation (button stub only).
-- Sharing/export.
+### 2. Fix the Lovable provider (only file touched: `src/lib/chat.functions.ts`, only inside image helpers — text helpers untouched)
+Rewrite `callLovableImage` to use the **correct, documented** Gateway contract:
+- Use model `openai/gpt-image-2` (OpenAI-shape body: `prompt`, `quality:"low"`, `size:"1024x1024"`, `n:1`, non-streaming for simplicity since we upload to storage and return one final image).
+- Parse `data[0].b64_json` directly (per docs, Gateway normalizes Gemini → OpenAI shape too).
+- On non-2xx, throw with status + first 200 chars of body so logs are actionable.
 
-After plan approval I'll: enable Cloud → add Gemini+HF secrets via secure form → run migration → write server fns + UI.
+Add a second Lovable attempt with `google/gemini-2.5-flash-image` using the **Gemini body shape** (`messages` + `modalities`) as a built-in secondary, so we have two free-tier paths through the Gateway.
+
+### 3. Reorder fallback chain
+New order (free/working first, paid/credit-limited last):
+`lovable-gpt-image-2 → lovable-gemini-flash-image → openai → stability → huggingface`
+
+Each provider wrapped with try/catch and `console.error` including the provider name + status, so future failures are diagnosable from server logs.
+
+### 4. Keep text chat 100% unchanged
+- `generateText`, `callGroq`, `callGemini`, `callHuggingFaceText`, `SYSTEM_PROMPT`, `sendMessage` text branch, intent detection — all untouched.
+- Only the image helper functions and the `providers` array inside `generateImage` are modified.
+
+### 5. Verify end-to-end
+- Call `sendMessage` server fn with a text prompt → confirm text branch still returns assistant text (no regression).
+- Call `sendMessage` with "draw a cat" → confirm image branch produces a stored image and signed URL.
+- Tail server-function logs to confirm which provider succeeded.
+
+## Files touched
+- `src/lib/chat.functions.ts` — image helpers + provider chain only.
+
+## Out of scope
+- Text chat code, prompts, models, response handling.
+- UI changes (`NovaMindApp.tsx`, `ChatMessage.tsx`) — already wired for images.
+- DB schema, RLS, storage bucket — already working.
+- Dependency upgrades unless a vulnerability blocks the fix (none expected).
