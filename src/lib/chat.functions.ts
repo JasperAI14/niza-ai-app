@@ -305,10 +305,12 @@ async function callOpenAIImage(prompt: string): Promise<ArrayBuffer> {
 
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
   const providers: Array<{ name: string; fn: (p: string) => Promise<ArrayBuffer> }> = [
-    { name: "lovable", fn: callLovableImage },
-    { name: "stability", fn: callStability },
+    { name: "lovable-gpt-image-2", fn: callLovableGptImage },
+    { name: "lovable-gemini-image", fn: callLovableGeminiImage },
     { name: "openai", fn: callOpenAIImage },
+    { name: "stability", fn: callStability },
     { name: "huggingface", fn: callHuggingFaceImage },
+
   ];
   let lastErr: any = null;
   for (const p of providers) {
