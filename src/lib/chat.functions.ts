@@ -224,7 +224,34 @@ async function callHuggingFaceImage(prompt: string): Promise<ArrayBuffer> {
   throw lastErr ?? new Error("hf image failed");
 }
 
-async function callLovableImage(prompt: string): Promise<ArrayBuffer> {
+async function callLovableGptImage(prompt: string): Promise<ArrayBuffer> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "openai/gpt-image-2",
+      prompt,
+      size: "1024x1024",
+      quality: "low",
+      n: 1,
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`lovable gpt-image-2 ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("lovable gpt-image-2 empty");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function callLovableGeminiImage(prompt: string): Promise<ArrayBuffer> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("no lovable key");
   const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
@@ -232,35 +259,23 @@ async function callLovableImage(prompt: string): Promise<ArrayBuffer> {
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "google/gemini-2.5-flash-image",
-      prompt,
-      size: "1024x1024",
-      n: 1,
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
     }),
   });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
-    throw new Error(`lovable img ${r.status} ${t.slice(0, 200)}`);
+    throw new Error(`lovable gemini-img ${r.status} ${t.slice(0, 200)}`);
   }
   const j = await r.json();
-  const item = j?.data?.[0];
-  // Lovable returns either b64_json, url, or a data: URL string
-  let b64: string | undefined = item?.b64_json;
-  const url: string | undefined = item?.url ?? item?.image_url;
-  if (!b64 && typeof url === "string") {
-    if (url.startsWith("data:")) {
-      b64 = url.split(",")[1];
-    } else {
-      const imgR = await fetch(url);
-      if (!imgR.ok) throw new Error("lovable img fetch " + imgR.status);
-      return await imgR.arrayBuffer();
-    }
-  }
-  if (!b64) throw new Error("lovable img empty: " + JSON.stringify(j).slice(0, 200));
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("lovable gemini-img empty");
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes.buffer;
 }
+
 
 async function callOpenAIImage(prompt: string): Promise<ArrayBuffer> {
   const key = process.env.OPENAI_API_KEY;
@@ -290,10 +305,12 @@ async function callOpenAIImage(prompt: string): Promise<ArrayBuffer> {
 
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
   const providers: Array<{ name: string; fn: (p: string) => Promise<ArrayBuffer> }> = [
-    { name: "lovable", fn: callLovableImage },
-    { name: "stability", fn: callStability },
+    { name: "lovable-gpt-image-2", fn: callLovableGptImage },
+    { name: "lovable-gemini-image", fn: callLovableGeminiImage },
     { name: "openai", fn: callOpenAIImage },
+    { name: "stability", fn: callStability },
     { name: "huggingface", fn: callHuggingFaceImage },
+
   ];
   let lastErr: any = null;
   for (const p of providers) {
