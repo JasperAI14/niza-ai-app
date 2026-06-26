@@ -40,8 +40,45 @@ export function NovaMindApp() {
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [optimistic, setOptimistic] = useState<UIMessage[]>([]);
+  const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const MAX_FILE_BYTES = 1_000_000; // 1MB per file (text)
+  const MAX_CHARS = 60_000; // total appended chars cap
+
+  async function handleFiles(files: FileList | null) {
+    if (!files) return;
+    const next: { name: string; text: string }[] = [];
+    for (const f of Array.from(files)) {
+      if (f.size > MAX_FILE_BYTES) {
+        toast.error(`${f.name} is too large (max 1MB).`);
+        continue;
+      }
+      const isText =
+        f.type.startsWith("text/") ||
+        /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|env|html?|css|scss|js|jsx|ts|tsx|py|rb|go|rs|java|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|sql|xml)$/i.test(
+          f.name,
+        );
+      if (!isText) {
+        toast.error(`${f.name}: only text/code files are supported right now.`);
+        continue;
+      }
+      try {
+        const text = await f.text();
+        next.push({ name: f.name, text });
+      } catch {
+        toast.error(`Could not read ${f.name}.`);
+      }
+    }
+    if (next.length) setAttachments((a) => [...a, ...next]);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  function removeAttachment(idx: number) {
+    setAttachments((a) => a.filter((_, i) => i !== idx));
+  }
 
   const meQ = useQuery({ queryKey: ["me"], queryFn: () => fetchMe() });
   const threadsQ = useQuery({ queryKey: ["threads"], queryFn: () => fetchThreads() });
