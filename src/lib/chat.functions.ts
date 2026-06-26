@@ -162,8 +162,34 @@ async function callHuggingFaceText(messages: ChatMsg[]): Promise<string> {
   return txt;
 }
 
+async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("no openrouter key");
+  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://novamind.lovable.app",
+      "X-Title": "NovaMind AI",
+    },
+    body: JSON.stringify({
+      model: "meta-llama/llama-3.3-70b-instruct:free",
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`openrouter ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const txt = j.choices?.[0]?.message?.content;
+  if (!txt) throw new Error("openrouter empty");
+  return txt;
+}
+
 async function generateText(messages: ChatMsg[]): Promise<string> {
-  const providers = [callGroq, callGemini, callHuggingFaceText];
+  const providers = [callGroq, callGemini, callOpenRouterText, callHuggingFaceText];
   let lastErr: any = null;
   for (const p of providers) {
     try {
@@ -303,14 +329,57 @@ async function callOpenAIImage(prompt: string): Promise<ArrayBuffer> {
   return bytes.buffer;
 }
 
+async function callOpenRouterImage(prompt: string): Promise<ArrayBuffer> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("no openrouter key");
+  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://novamind.lovable.app",
+      "X-Title": "NovaMind AI",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image-preview",
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`openrouter img ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const msg = j?.choices?.[0]?.message;
+  let dataUrl: string | undefined;
+  if (Array.isArray(msg?.images) && msg.images[0]?.image_url?.url) {
+    dataUrl = msg.images[0].image_url.url;
+  } else if (Array.isArray(msg?.content)) {
+    const imgBlock = msg.content.find((c: any) => c?.type === "image_url" || c?.image_url);
+    dataUrl = imgBlock?.image_url?.url;
+  }
+  if (!dataUrl) throw new Error("openrouter img empty: " + JSON.stringify(j).slice(0, 200));
+  if (dataUrl.startsWith("data:")) {
+    const b64 = dataUrl.split(",")[1];
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  const imgR = await fetch(dataUrl);
+  if (!imgR.ok) throw new Error("openrouter img fetch " + imgR.status);
+  return await imgR.arrayBuffer();
+}
+
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
   const providers: Array<{ name: string; fn: (p: string) => Promise<ArrayBuffer> }> = [
     { name: "lovable-gpt-image-2", fn: callLovableGptImage },
     { name: "lovable-gemini-image", fn: callLovableGeminiImage },
+    { name: "openrouter", fn: callOpenRouterImage },
     { name: "openai", fn: callOpenAIImage },
     { name: "stability", fn: callStability },
     { name: "huggingface", fn: callHuggingFaceImage },
-
   ];
   let lastErr: any = null;
   for (const p of providers) {
