@@ -444,8 +444,9 @@ export function NovaMindApp() {
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition disabled:opacity-40 hover:opacity-90"
                 aria-label="Send"
               >
-              <Send className="h-4 w-4" />
-            </button>
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
           </div>
           <p className="mx-auto mt-2 max-w-3xl text-center text-xs text-muted-foreground">
             NovaMind AI can make mistakes. Verify important information.
