@@ -201,9 +201,23 @@ export function NovaMindApp() {
 
   async function handleSend() {
     const text = input.trim();
-    if (!text || sendMut.isPending) return;
+    if ((!text && attachments.length === 0) || sendMut.isPending) return;
+    let combined = text;
+    if (attachments.length > 0) {
+      let body = "";
+      for (const a of attachments) {
+        const chunk = `\n\n--- Attached file: ${a.name} ---\n${a.text}\n--- end ${a.name} ---`;
+        if ((body.length + chunk.length) > MAX_CHARS) {
+          body += `\n\n[Additional attachments truncated to stay within size limit.]`;
+          break;
+        }
+        body += chunk;
+      }
+      combined = `${text || "Please review the attached file(s)."}${body}`;
+    }
     setInput("");
-    sendMut.mutate(text);
+    setAttachments([]);
+    sendMut.mutate(combined);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
