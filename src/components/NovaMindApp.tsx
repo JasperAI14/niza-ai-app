@@ -181,7 +181,7 @@ export function NovaMindApp() {
   });
 
   const sendMut = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (payload: { content: string; images: string[] }) => {
       let tid = activeId;
       if (!tid) {
         const t = await newThreadFn();
@@ -189,8 +189,14 @@ export function NovaMindApp() {
         setActiveId(t.id);
         tid = t.id;
       }
-      const isImage = !!detectImageRequest(content);
-      const userMsg: UIMessage = { id: "u-" + crypto.randomUUID(), role: "user", content };
+      const hasImages = payload.images.length > 0;
+      const isImage = !hasImages && !!detectImageRequest(payload.content);
+      const userMsg: UIMessage = {
+        id: "u-" + crypto.randomUUID(),
+        role: "user",
+        content: payload.content,
+        image_url: hasImages ? payload.images[0] : null,
+      };
       const pending: UIMessage = {
         id: "p-" + crypto.randomUUID(),
         role: "assistant",
@@ -198,7 +204,9 @@ export function NovaMindApp() {
         pending: isImage ? "image" : "text",
       };
       setOptimistic([userMsg, pending]);
-      const res = await sendFn({ data: { threadId: tid, content } });
+      const res = await sendFn({
+        data: { threadId: tid, content: payload.content, images: hasImages ? payload.images : undefined },
+      });
       return { res, tid };
     },
     onSuccess: async ({ res, tid }) => {
@@ -207,7 +215,6 @@ export function NovaMindApp() {
         setOptimistic([]);
         return;
       }
-      // refresh messages, threads (title may have changed), and usage
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["messages", tid] }),
         qc.invalidateQueries({ queryKey: ["threads"] }),
@@ -250,22 +257,31 @@ export function NovaMindApp() {
   async function handleSend() {
     const text = input.trim();
     if ((!text && attachments.length === 0) || sendMut.isPending) return;
+    const stillProcessing = attachments.some((a) => a.kind === "image" && a.progress < 100);
+    if (stillProcessing) {
+      toast.error("Please wait for image processing to finish.");
+      return;
+    }
+    const images = attachments.filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image").map((a) => a.dataUrl);
+    const texts = attachments.filter((a): a is Extract<Attachment, { kind: "text" }> => a.kind === "text");
     let combined = text;
-    if (attachments.length > 0) {
+    if (texts.length > 0) {
       let body = "";
-      for (const a of attachments) {
+      for (const a of texts) {
         const chunk = `\n\n--- Attached file: ${a.name} ---\n${a.text}\n--- end ${a.name} ---`;
-        if ((body.length + chunk.length) > MAX_CHARS) {
+        if (body.length + chunk.length > MAX_CHARS) {
           body += `\n\n[Additional attachments truncated to stay within size limit.]`;
           break;
         }
         body += chunk;
       }
       combined = `${text || "Please review the attached file(s)."}${body}`;
+    } else if (!combined && images.length > 0) {
+      combined = "Please analyze the attached image(s).";
     }
     setInput("");
     setAttachments([]);
-    sendMut.mutate(combined);
+    sendMut.mutate({ content: combined, images });
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
