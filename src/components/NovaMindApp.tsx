@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, MessageSquare, Menu, LogOut, Sparkles, Film, Paperclip, X, FileText } from "lucide-react";
+import { Plus, Send, Trash2, MessageSquare, Menu, LogOut, Sparkles, Film, X, FileText, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
@@ -16,6 +16,7 @@ import {
   type DBMessage,
 } from "@/lib/chat.functions";
 import { detectImageRequest } from "@/lib/intent";
+import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-utils";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 
 const SAMPLES = [
@@ -40,20 +41,68 @@ export function NovaMindApp() {
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [optimistic, setOptimistic] = useState<UIMessage[]>([]);
-  const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
+  type Attachment =
+    | { kind: "text"; name: string; text: string; progress: 100 }
+    | { kind: "image"; name: string; dataUrl: string; bytes: number; progress: number };
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const MAX_FILE_BYTES = 1_000_000; // 1MB per file (text)
-  const MAX_CHARS = 60_000; // total appended chars cap
+  const MAX_TEXT_FILE_BYTES = 1_000_000;
+  const MAX_CHARS = 60_000;
+  const MAX_IMAGES = 4;
 
   async function handleFiles(files: FileList | null) {
     if (!files) return;
-    const next: { name: string; text: string }[] = [];
     for (const f of Array.from(files)) {
-      if (f.size > MAX_FILE_BYTES) {
-        toast.error(`${f.name} is too large (max 1MB).`);
+      const isImg = isAcceptedImage(f);
+      if (isImg) {
+        const currentImages = attachments.filter((a) => a.kind === "image").length;
+        if (currentImages >= MAX_IMAGES) {
+          toast.error(`You can attach up to ${MAX_IMAGES} images.`);
+          continue;
+        }
+        if (f.size > 50 * 1024 * 1024) {
+          toast.error(`${f.name} is too large to process (max 50MB source).`);
+          continue;
+        }
+        const placeholderIdx = attachments.length;
+        const placeholder: Attachment = {
+          kind: "image",
+          name: f.name,
+          dataUrl: "",
+          bytes: 0,
+          progress: 0,
+        };
+        setAttachments((a) => [...a, placeholder]);
+        try {
+          const out = await compressImage(f, (pct) => {
+            setAttachments((a) =>
+              a.map((it, i) => (i === placeholderIdx && it.kind === "image" ? { ...it, progress: pct } : it)),
+            );
+          });
+          if (out.bytes > MAX_IMAGE_BYTES) {
+            toast.error(`${f.name} still exceeds 20MB after compression.`);
+            setAttachments((a) => a.filter((_, i) => i !== placeholderIdx));
+            continue;
+          }
+          setAttachments((a) =>
+            a.map((it, i) =>
+              i === placeholderIdx && it.kind === "image"
+                ? { kind: "image", name: out.name, dataUrl: out.dataUrl, bytes: out.bytes, progress: 100 }
+                : it,
+            ),
+          );
+        } catch (err) {
+          toast.error(`Could not process ${f.name}: ${(err as Error).message}`);
+          setAttachments((a) => a.filter((_, i) => i !== placeholderIdx));
+        }
+        continue;
+      }
+      // Text/code file path
+      if (f.size > MAX_TEXT_FILE_BYTES) {
+        toast.error(`${f.name} is too large (max 1MB for text files).`);
         continue;
       }
       const isText =
@@ -62,17 +111,16 @@ export function NovaMindApp() {
           f.name,
         );
       if (!isText) {
-        toast.error(`${f.name}: only text/code files are supported right now.`);
+        toast.error(`${f.name}: unsupported file type.`);
         continue;
       }
       try {
         const text = await f.text();
-        next.push({ name: f.name, text });
+        setAttachments((a) => [...a, { kind: "text", name: f.name, text, progress: 100 }]);
       } catch {
         toast.error(`Could not read ${f.name}.`);
       }
     }
-    if (next.length) setAttachments((a) => [...a, ...next]);
     if (fileRef.current) fileRef.current.value = "";
   }
 
