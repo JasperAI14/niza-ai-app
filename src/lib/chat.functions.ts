@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { LIMITS, PROMO_CODE, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
+import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
 import { detectImageRequest } from "./intent";
 
 // ---------- types ----------
@@ -443,7 +443,8 @@ export const submitPromo = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const profile = await loadProfile(supabase, userId);
     if (profile.promo_used) return { ok: false, plan: profile.plan, message: "Promo already used." };
-    const isValid = data.code.trim().toLowerCase() === PROMO_CODE.toLowerCase();
+    const serverCode = (process.env.PROMO_CODE ?? "").trim().toLowerCase();
+    const isValid = !!serverCode && data.code.trim().toLowerCase() === serverCode;
     const plan: Plan = isValid ? "premium" : "free";
     const admin = await adminClient();
     await admin
