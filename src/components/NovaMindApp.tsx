@@ -464,10 +464,34 @@ export function NovaMindApp() {
             {attachments.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachments.map((a, i) => (
-                  <div key={i} className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs">
-                    <FileText className="h-3.5 w-3.5 text-primary" />
-                    <span className="max-w-[180px] truncate">{a.name}</span>
-                    <button onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`}>
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-border bg-card p-1.5 pr-2 text-xs">
+                    {a.kind === "image" ? (
+                      <>
+                        {a.dataUrl ? (
+                          <img src={a.dataUrl} alt={a.name} className="h-10 w-10 rounded object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
+                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="max-w-[160px] truncate">{a.name}</span>
+                          {a.progress < 100 ? (
+                            <div className="mt-0.5 h-1 w-32 overflow-hidden rounded-full bg-muted">
+                              <div className="h-full bg-primary transition-all" style={{ width: `${a.progress}%` }} />
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">{(a.bytes / 1024).toFixed(0)} KB · ready</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4 text-primary" />
+                        <span className="max-w-[180px] truncate">{a.name}</span>
+                      </>
+                    )}
+                    <button onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`} className="ml-1">
                       <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </button>
                   </div>
@@ -479,7 +503,7 @@ export function NovaMindApp() {
                 ref={fileRef}
                 type="file"
                 multiple
-                accept=".txt,.md,.markdown,.json,.csv,.tsv,.log,.yaml,.yml,.toml,.ini,.env,.html,.htm,.css,.scss,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.c,.cc,.cpp,.h,.hpp,.cs,.php,.sh,.bash,.zsh,.sql,.xml,text/*"
+                accept="image/jpeg,image/jpg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.txt,.md,.markdown,.json,.csv,.tsv,.log,.yaml,.yml,.toml,.ini,.env,.html,.htm,.css,.scss,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.c,.cc,.cpp,.h,.hpp,.cs,.php,.sh,.bash,.zsh,.sql,.xml,text/*"
                 className="hidden"
                 onChange={(e) => handleFiles(e.target.files)}
               />
