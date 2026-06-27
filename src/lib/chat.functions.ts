@@ -39,8 +39,8 @@ async function loadProfile(supabase: any, userId: string): Promise<ProfileData> 
     .eq("id", userId)
     .maybeSingle();
   if (data) return data as ProfileData;
-  // backfill (e.g. for users created before trigger)
-  await supabase.from("profiles").insert({ id: userId }).select();
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin.from("profiles").insert({ id: userId });
   return { plan: "free", promo_used: false, email: null };
 }
 
@@ -51,8 +51,9 @@ async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Prom
     .select("text_count, image_count, text_window_start, image_window_start")
     .eq("user_id", userId)
     .maybeSingle();
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   if (!data) {
-    await supabase.from("usage").insert({ user_id: userId });
+    await supabaseAdmin.from("usage").insert({ user_id: userId });
     return {
       text_count: 0,
       image_count: 0,
@@ -81,7 +82,7 @@ async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Prom
     updates.image_window_start = image_window_start;
   }
   if (Object.keys(updates).length > 0) {
-    await supabase.from("usage").update(updates).eq("user_id", userId);
+    await supabaseAdmin.from("usage").update(updates).eq("user_id", userId);
   }
   return {
     text_count,
@@ -91,6 +92,11 @@ async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Prom
     text_limit: lim.text,
     image_limit: lim.image,
   };
+}
+
+async function adminClient() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
 }
 
 // ---------- AI providers (text) ----------
