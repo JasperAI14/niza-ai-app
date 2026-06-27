@@ -445,7 +445,8 @@ export const submitPromo = createServerFn({ method: "POST" })
     if (profile.promo_used) return { ok: false, plan: profile.plan, message: "Promo already used." };
     const isValid = data.code.trim().toLowerCase() === PROMO_CODE.toLowerCase();
     const plan: Plan = isValid ? "premium" : "free";
-    await supabase
+    const admin = await adminClient();
+    await admin
       .from("profiles")
       .update({ plan, promo_used: true })
       .eq("id", userId);
