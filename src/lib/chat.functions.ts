@@ -188,6 +188,30 @@ async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
   return txt;
 }
 
+// Vision: pass text + image data URLs to a multimodal model via Lovable Gateway.
+async function callLovableVision(text: string, images: string[]): Promise<string> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const content: any[] = [{ type: "text", text: text || "Please analyze the attached image(s)." }];
+  for (const url of images) content.push({ type: "image_url", image_url: { url } });
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content }],
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`lovable vision ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const txt = j.choices?.[0]?.message?.content;
+  if (!txt) throw new Error("lovable vision empty");
+  return typeof txt === "string" ? txt : JSON.stringify(txt);
+}
+
 async function generateText(messages: ChatMsg[]): Promise<string> {
   const providers = [callGroq, callGemini, callOpenRouterText, callHuggingFaceText];
   let lastErr: any = null;
@@ -491,8 +515,17 @@ function deriveTitle(text: string) {
 
 export const sendMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { threadId: string; content: string }) =>
-    z.object({ threadId: z.string().uuid(), content: z.string().min(1).max(8000) }).parse(d),
+  .inputValidator((d: { threadId: string; content: string; images?: string[] }) =>
+    z
+      .object({
+        threadId: z.string().uuid(),
+        content: z.string().min(1).max(12000),
+        images: z
+          .array(z.string().regex(/^data:image\/(jpeg|jpg|png|webp);base64,/i).max(8_000_000))
+          .max(4)
+          .optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
@@ -509,7 +542,9 @@ export const sendMessage = createServerFn({ method: "POST" })
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
 
-    const imagePrompt = detectImageRequest(data.content);
+    const hasImages = !!data.images && data.images.length > 0;
+    // Image uploads suppress generation intent — analyze the upload instead.
+    const imagePrompt = hasImages ? null : detectImageRequest(data.content);
     const isImage = !!imagePrompt;
 
     if (isImage && usage.image_count >= usage.image_limit) {
@@ -562,6 +597,17 @@ export const sendMessage = createServerFn({ method: "POST" })
       } catch (e) {
         console.error("image gen failed:", e);
         assistantContent = "Sorry, image generation is unavailable right now. Please try again later.";
+      }
+    } else if (hasImages) {
+      try {
+        assistantContent = await callLovableVision(data.content, data.images!);
+        await supabase
+          .from("usage")
+          .update({ text_count: usage.text_count + 1 })
+          .eq("user_id", userId);
+      } catch (e) {
+        console.error("vision failed:", e);
+        assistantContent = "Sorry, I couldn't analyze the image right now. Please try again.";
       }
     } else {
       // Build history (re-load last N messages for context)
