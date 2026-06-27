@@ -597,7 +597,8 @@ export const sendMessage = createServerFn({ method: "POST" })
           .createSignedUrl(path, 60 * 60 * 6);
         signedImage = signed?.signedUrl ?? null;
         assistantContent = `Here's your image:`;
-        await supabase
+        const _admin1 = await adminClient();
+        await _admin1
           .from("usage")
           .update({ image_count: usage.image_count + 1 })
           .eq("user_id", userId);
@@ -608,7 +609,8 @@ export const sendMessage = createServerFn({ method: "POST" })
     } else if (hasImages) {
       try {
         assistantContent = await callLovableVision(data.content, data.images!);
-        await supabase
+        const _admin2 = await adminClient();
+        await _admin2
           .from("usage")
           .update({ text_count: usage.text_count + 1 })
           .eq("user_id", userId);
@@ -629,7 +631,8 @@ export const sendMessage = createServerFn({ method: "POST" })
         assistantContent = await generateText(
           (history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
         );
-        await supabase
+        const _admin3 = await adminClient();
+        await _admin3
           .from("usage")
           .update({ text_count: usage.text_count + 1 })
           .eq("user_id", userId);
@@ -705,7 +708,8 @@ export const regenerateImage = createServerFn({ method: "POST" })
         .from("messages")
         .update({ image_url: path, content: "Here's your image:" })
         .eq("id", data.messageId);
-      await supabase
+      const _admin4 = await adminClient();
+      await _admin4
         .from("usage")
         .update({ image_count: usage.image_count + 1 })
         .eq("user_id", userId);
