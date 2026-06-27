@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, MessageSquare, Menu, LogOut, Sparkles, Film, Paperclip, X, FileText } from "lucide-react";
+import { Plus, Send, Trash2, MessageSquare, Menu, LogOut, Sparkles, Film, X, FileText, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
@@ -16,6 +16,7 @@ import {
   type DBMessage,
 } from "@/lib/chat.functions";
 import { detectImageRequest } from "@/lib/intent";
+import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-utils";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 
 const SAMPLES = [
@@ -40,20 +41,68 @@ export function NovaMindApp() {
   const [input, setInput] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [optimistic, setOptimistic] = useState<UIMessage[]>([]);
-  const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
+  type Attachment =
+    | { kind: "text"; name: string; text: string; progress: 100 }
+    | { kind: "image"; name: string; dataUrl: string; bytes: number; progress: number };
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const MAX_FILE_BYTES = 1_000_000; // 1MB per file (text)
-  const MAX_CHARS = 60_000; // total appended chars cap
+  const MAX_TEXT_FILE_BYTES = 1_000_000;
+  const MAX_CHARS = 60_000;
+  const MAX_IMAGES = 4;
 
   async function handleFiles(files: FileList | null) {
     if (!files) return;
-    const next: { name: string; text: string }[] = [];
     for (const f of Array.from(files)) {
-      if (f.size > MAX_FILE_BYTES) {
-        toast.error(`${f.name} is too large (max 1MB).`);
+      const isImg = isAcceptedImage(f);
+      if (isImg) {
+        const currentImages = attachments.filter((a) => a.kind === "image").length;
+        if (currentImages >= MAX_IMAGES) {
+          toast.error(`You can attach up to ${MAX_IMAGES} images.`);
+          continue;
+        }
+        if (f.size > 50 * 1024 * 1024) {
+          toast.error(`${f.name} is too large to process (max 50MB source).`);
+          continue;
+        }
+        const placeholderIdx = attachments.length;
+        const placeholder: Attachment = {
+          kind: "image",
+          name: f.name,
+          dataUrl: "",
+          bytes: 0,
+          progress: 0,
+        };
+        setAttachments((a) => [...a, placeholder]);
+        try {
+          const out = await compressImage(f, (pct) => {
+            setAttachments((a) =>
+              a.map((it, i) => (i === placeholderIdx && it.kind === "image" ? { ...it, progress: pct } : it)),
+            );
+          });
+          if (out.bytes > MAX_IMAGE_BYTES) {
+            toast.error(`${f.name} still exceeds 20MB after compression.`);
+            setAttachments((a) => a.filter((_, i) => i !== placeholderIdx));
+            continue;
+          }
+          setAttachments((a) =>
+            a.map((it, i) =>
+              i === placeholderIdx && it.kind === "image"
+                ? { kind: "image", name: out.name, dataUrl: out.dataUrl, bytes: out.bytes, progress: 100 }
+                : it,
+            ),
+          );
+        } catch (err) {
+          toast.error(`Could not process ${f.name}: ${(err as Error).message}`);
+          setAttachments((a) => a.filter((_, i) => i !== placeholderIdx));
+        }
+        continue;
+      }
+      // Text/code file path
+      if (f.size > MAX_TEXT_FILE_BYTES) {
+        toast.error(`${f.name} is too large (max 1MB for text files).`);
         continue;
       }
       const isText =
@@ -62,17 +111,16 @@ export function NovaMindApp() {
           f.name,
         );
       if (!isText) {
-        toast.error(`${f.name}: only text/code files are supported right now.`);
+        toast.error(`${f.name}: unsupported file type.`);
         continue;
       }
       try {
         const text = await f.text();
-        next.push({ name: f.name, text });
+        setAttachments((a) => [...a, { kind: "text", name: f.name, text, progress: 100 }]);
       } catch {
         toast.error(`Could not read ${f.name}.`);
       }
     }
-    if (next.length) setAttachments((a) => [...a, ...next]);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -133,7 +181,7 @@ export function NovaMindApp() {
   });
 
   const sendMut = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (payload: { content: string; images: string[] }) => {
       let tid = activeId;
       if (!tid) {
         const t = await newThreadFn();
@@ -141,8 +189,14 @@ export function NovaMindApp() {
         setActiveId(t.id);
         tid = t.id;
       }
-      const isImage = !!detectImageRequest(content);
-      const userMsg: UIMessage = { id: "u-" + crypto.randomUUID(), role: "user", content };
+      const hasImages = payload.images.length > 0;
+      const isImage = !hasImages && !!detectImageRequest(payload.content);
+      const userMsg: UIMessage = {
+        id: "u-" + crypto.randomUUID(),
+        role: "user",
+        content: payload.content,
+        image_url: hasImages ? payload.images[0] : null,
+      };
       const pending: UIMessage = {
         id: "p-" + crypto.randomUUID(),
         role: "assistant",
@@ -150,7 +204,9 @@ export function NovaMindApp() {
         pending: isImage ? "image" : "text",
       };
       setOptimistic([userMsg, pending]);
-      const res = await sendFn({ data: { threadId: tid, content } });
+      const res = await sendFn({
+        data: { threadId: tid, content: payload.content, images: hasImages ? payload.images : undefined },
+      });
       return { res, tid };
     },
     onSuccess: async ({ res, tid }) => {
@@ -159,7 +215,6 @@ export function NovaMindApp() {
         setOptimistic([]);
         return;
       }
-      // refresh messages, threads (title may have changed), and usage
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["messages", tid] }),
         qc.invalidateQueries({ queryKey: ["threads"] }),
@@ -202,22 +257,31 @@ export function NovaMindApp() {
   async function handleSend() {
     const text = input.trim();
     if ((!text && attachments.length === 0) || sendMut.isPending) return;
+    const stillProcessing = attachments.some((a) => a.kind === "image" && a.progress < 100);
+    if (stillProcessing) {
+      toast.error("Please wait for image processing to finish.");
+      return;
+    }
+    const images = attachments.filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image").map((a) => a.dataUrl);
+    const texts = attachments.filter((a): a is Extract<Attachment, { kind: "text" }> => a.kind === "text");
     let combined = text;
-    if (attachments.length > 0) {
+    if (texts.length > 0) {
       let body = "";
-      for (const a of attachments) {
+      for (const a of texts) {
         const chunk = `\n\n--- Attached file: ${a.name} ---\n${a.text}\n--- end ${a.name} ---`;
-        if ((body.length + chunk.length) > MAX_CHARS) {
+        if (body.length + chunk.length > MAX_CHARS) {
           body += `\n\n[Additional attachments truncated to stay within size limit.]`;
           break;
         }
         body += chunk;
       }
       combined = `${text || "Please review the attached file(s)."}${body}`;
+    } else if (!combined && images.length > 0) {
+      combined = "Please analyze the attached image(s).";
     }
     setInput("");
     setAttachments([]);
-    sendMut.mutate(combined);
+    sendMut.mutate({ content: combined, images });
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -400,10 +464,34 @@ export function NovaMindApp() {
             {attachments.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachments.map((a, i) => (
-                  <div key={i} className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs">
-                    <FileText className="h-3.5 w-3.5 text-primary" />
-                    <span className="max-w-[180px] truncate">{a.name}</span>
-                    <button onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`}>
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-border bg-card p-1.5 pr-2 text-xs">
+                    {a.kind === "image" ? (
+                      <>
+                        {a.dataUrl ? (
+                          <img src={a.dataUrl} alt={a.name} className="h-10 w-10 rounded object-cover" />
+                        ) : (
+                          <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
+                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="max-w-[160px] truncate">{a.name}</span>
+                          {a.progress < 100 ? (
+                            <div className="mt-0.5 h-1 w-32 overflow-hidden rounded-full bg-muted">
+                              <div className="h-full bg-primary transition-all" style={{ width: `${a.progress}%` }} />
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">{(a.bytes / 1024).toFixed(0)} KB · ready</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4 text-primary" />
+                        <span className="max-w-[180px] truncate">{a.name}</span>
+                      </>
+                    )}
+                    <button onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`} className="ml-1">
                       <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </button>
                   </div>
@@ -415,7 +503,7 @@ export function NovaMindApp() {
                 ref={fileRef}
                 type="file"
                 multiple
-                accept=".txt,.md,.markdown,.json,.csv,.tsv,.log,.yaml,.yml,.toml,.ini,.env,.html,.htm,.css,.scss,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.c,.cc,.cpp,.h,.hpp,.cs,.php,.sh,.bash,.zsh,.sql,.xml,text/*"
+                accept="image/jpeg,image/jpg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.txt,.md,.markdown,.json,.csv,.tsv,.log,.yaml,.yml,.toml,.ini,.env,.html,.htm,.css,.scss,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.c,.cc,.cpp,.h,.hpp,.cs,.php,.sh,.bash,.zsh,.sql,.xml,text/*"
                 className="hidden"
                 onChange={(e) => handleFiles(e.target.files)}
               />

@@ -6,8 +6,6 @@ export const LIMITS = {
 export const TEXT_RESET_MS = 2 * 60 * 60 * 1000; // 2h fallback
 export const IMAGE_RESET_MS = 5 * 60 * 60 * 1000; // 5h
 
-export const PROMO_CODE = "JASPER AI";
-
 export type Plan = "free" | "premium";
 
 export function planLimits(plan: Plan) {

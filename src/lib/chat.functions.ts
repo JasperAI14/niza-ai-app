@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { LIMITS, PROMO_CODE, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
+import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
 import { detectImageRequest } from "./intent";
 
 // ---------- types ----------
@@ -39,8 +39,8 @@ async function loadProfile(supabase: any, userId: string): Promise<ProfileData> 
     .eq("id", userId)
     .maybeSingle();
   if (data) return data as ProfileData;
-  // backfill (e.g. for users created before trigger)
-  await supabase.from("profiles").insert({ id: userId }).select();
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin.from("profiles").insert({ id: userId });
   return { plan: "free", promo_used: false, email: null };
 }
 
@@ -51,8 +51,9 @@ async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Prom
     .select("text_count, image_count, text_window_start, image_window_start")
     .eq("user_id", userId)
     .maybeSingle();
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   if (!data) {
-    await supabase.from("usage").insert({ user_id: userId });
+    await supabaseAdmin.from("usage").insert({ user_id: userId });
     return {
       text_count: 0,
       image_count: 0,
@@ -81,7 +82,7 @@ async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Prom
     updates.image_window_start = image_window_start;
   }
   if (Object.keys(updates).length > 0) {
-    await supabase.from("usage").update(updates).eq("user_id", userId);
+    await (supabaseAdmin as any).from("usage").update(updates).eq("user_id", userId);
   }
   return {
     text_count,
@@ -91,6 +92,11 @@ async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Prom
     text_limit: lim.text,
     image_limit: lim.image,
   };
+}
+
+async function adminClient() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  return supabaseAdmin;
 }
 
 // ---------- AI providers (text) ----------
@@ -186,6 +192,30 @@ async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
   const txt = j.choices?.[0]?.message?.content;
   if (!txt) throw new Error("openrouter empty");
   return txt;
+}
+
+// Vision: pass text + image data URLs to a multimodal model via Lovable Gateway.
+async function callLovableVision(text: string, images: string[]): Promise<string> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const content: any[] = [{ type: "text", text: text || "Please analyze the attached image(s)." }];
+  for (const url of images) content.push({ type: "image_url", image_url: { url } });
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content }],
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`lovable vision ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const txt = j.choices?.[0]?.message?.content;
+  if (!txt) throw new Error("lovable vision empty");
+  return typeof txt === "string" ? txt : JSON.stringify(txt);
 }
 
 async function generateText(messages: ChatMsg[]): Promise<string> {
@@ -413,9 +443,11 @@ export const submitPromo = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     const profile = await loadProfile(supabase, userId);
     if (profile.promo_used) return { ok: false, plan: profile.plan, message: "Promo already used." };
-    const isValid = data.code.trim().toLowerCase() === PROMO_CODE.toLowerCase();
+    const serverCode = (process.env.PROMO_CODE ?? "").trim().toLowerCase();
+    const isValid = !!serverCode && data.code.trim().toLowerCase() === serverCode;
     const plan: Plan = isValid ? "premium" : "free";
-    await supabase
+    const admin = await adminClient();
+    await admin
       .from("profiles")
       .update({ plan, promo_used: true })
       .eq("id", userId);
@@ -491,8 +523,17 @@ function deriveTitle(text: string) {
 
 export const sendMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { threadId: string; content: string }) =>
-    z.object({ threadId: z.string().uuid(), content: z.string().min(1).max(8000) }).parse(d),
+  .inputValidator((d: { threadId: string; content: string; images?: string[] }) =>
+    z
+      .object({
+        threadId: z.string().uuid(),
+        content: z.string().min(1).max(12000),
+        images: z
+          .array(z.string().regex(/^data:image\/(jpeg|jpg|png|webp);base64,/i).max(8_000_000))
+          .max(4)
+          .optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
@@ -509,7 +550,9 @@ export const sendMessage = createServerFn({ method: "POST" })
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
 
-    const imagePrompt = detectImageRequest(data.content);
+    const hasImages = !!data.images && data.images.length > 0;
+    // Image uploads suppress generation intent — analyze the upload instead.
+    const imagePrompt = hasImages ? null : detectImageRequest(data.content);
     const isImage = !!imagePrompt;
 
     if (isImage && usage.image_count >= usage.image_limit) {
@@ -555,13 +598,26 @@ export const sendMessage = createServerFn({ method: "POST" })
           .createSignedUrl(path, 60 * 60 * 6);
         signedImage = signed?.signedUrl ?? null;
         assistantContent = `Here's your image:`;
-        await supabase
+        const _admin1 = await adminClient();
+        await _admin1
           .from("usage")
           .update({ image_count: usage.image_count + 1 })
           .eq("user_id", userId);
       } catch (e) {
         console.error("image gen failed:", e);
         assistantContent = "Sorry, image generation is unavailable right now. Please try again later.";
+      }
+    } else if (hasImages) {
+      try {
+        assistantContent = await callLovableVision(data.content, data.images!);
+        const _admin2 = await adminClient();
+        await _admin2
+          .from("usage")
+          .update({ text_count: usage.text_count + 1 })
+          .eq("user_id", userId);
+      } catch (e) {
+        console.error("vision failed:", e);
+        assistantContent = "Sorry, I couldn't analyze the image right now. Please try again.";
       }
     } else {
       // Build history (re-load last N messages for context)
@@ -576,7 +632,8 @@ export const sendMessage = createServerFn({ method: "POST" })
         assistantContent = await generateText(
           (history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
         );
-        await supabase
+        const _admin3 = await adminClient();
+        await _admin3
           .from("usage")
           .update({ text_count: usage.text_count + 1 })
           .eq("user_id", userId);
@@ -652,7 +709,8 @@ export const regenerateImage = createServerFn({ method: "POST" })
         .from("messages")
         .update({ image_url: path, content: "Here's your image:" })
         .eq("id", data.messageId);
-      await supabase
+      const _admin4 = await adminClient();
+      await _admin4
         .from("usage")
         .update({ image_count: usage.image_count + 1 })
         .eq("user_id", userId);
