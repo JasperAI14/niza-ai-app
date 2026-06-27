@@ -82,7 +82,7 @@ async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Prom
     updates.image_window_start = image_window_start;
   }
   if (Object.keys(updates).length > 0) {
-    await supabaseAdmin.from("usage").update(updates).eq("user_id", userId);
+    await (supabaseAdmin as any).from("usage").update(updates).eq("user_id", userId);
   }
   return {
     text_count,
