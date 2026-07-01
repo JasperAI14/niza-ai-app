@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
-import { detectImageRequest } from "./intent";
+import { detectImageRequest, detectImageEdit } from "./intent";
 
 // ---------- types ----------
 export type DBMessage = {
@@ -425,6 +425,53 @@ async function generateImage(prompt: string): Promise<ArrayBuffer> {
   throw lastErr ?? new Error("all image providers failed");
 }
 
+// Image editing via Lovable Gateway (Gemini 2.5 Flash Image / Nano Banana).
+// Accepts one or more input images (data URLs) and an edit instruction.
+async function callLovableImageEdit(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const content: any[] = [{ type: "text", text: prompt }];
+  for (const url of imageDataUrls) content.push({ type: "image_url", image_url: { url } });
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages: [{ role: "user", content }],
+      modalities: ["image", "text"],
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`lovable image-edit ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const msg = j?.choices?.[0]?.message;
+  let dataUrl: string | undefined;
+  if (Array.isArray(msg?.images) && msg.images[0]?.image_url?.url) {
+    dataUrl = msg.images[0].image_url.url;
+  } else if (Array.isArray(msg?.content)) {
+    const imgBlock = msg.content.find((c: any) => c?.type === "image_url" || c?.image_url);
+    dataUrl = imgBlock?.image_url?.url;
+  }
+  if (!dataUrl) throw new Error("lovable image-edit empty");
+  if (dataUrl.startsWith("data:")) {
+    const b64 = dataUrl.split(",")[1];
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  const imgR = await fetch(dataUrl);
+  if (!imgR.ok) throw new Error("image-edit fetch " + imgR.status);
+  return await imgR.arrayBuffer();
+}
+
+async function editImage(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
+  // Only Lovable Gemini reliably supports image editing right now.
+  return callLovableImageEdit(prompt, imageDataUrls);
+}
+
 // ---------- SERVER FUNCTIONS ----------
 
 export const getMe = createServerFn({ method: "GET" })
@@ -551,9 +598,11 @@ export const sendMessage = createServerFn({ method: "POST" })
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
 
     const hasImages = !!data.images && data.images.length > 0;
-    // Image uploads suppress generation intent — analyze the upload instead.
+    // If the user attached image(s) with an edit-style instruction, we route to image editing.
+    const wantsEdit = hasImages && detectImageEdit(data.content);
+    // Text-only image-generation intent
     const imagePrompt = hasImages ? null : detectImageRequest(data.content);
-    const isImage = !!imagePrompt;
+    const isImage = !!imagePrompt || wantsEdit;
 
     if (isImage && usage.image_count >= usage.image_limit) {
       return { ok: false, kind: "limit" as const, message: "Image limit reached. Resets every 5 hours." };
@@ -584,9 +633,29 @@ export const sendMessage = createServerFn({ method: "POST" })
     let imagePath: string | null = null;
     let signedImage: string | null = null;
 
-    if (isImage) {
+    if (wantsEdit) {
       try {
-        const buf = await generateImage(imagePrompt!);
+        const buf = await editImage(data.content, data.images!);
+        const path = `${userId}/${crypto.randomUUID()}.png`;
+        const { error: upErr } = await supabase.storage
+          .from("generated-images")
+          .upload(path, new Uint8Array(buf), { contentType: "image/png" });
+        if (upErr) throw upErr;
+        imagePath = path;
+        const { data: signed } = await supabase.storage
+          .from("generated-images")
+          .createSignedUrl(path, 60 * 60 * 6);
+        signedImage = signed?.signedUrl ?? null;
+        assistantContent = `Here's your edited image:`;
+        const _admE = await adminClient();
+        await _admE.from("usage").update({ image_count: usage.image_count + 1 }).eq("user_id", userId);
+      } catch (e) {
+        console.error("image edit failed:", e);
+        assistantContent = "Sorry, image editing is unavailable right now. Please try again later.";
+      }
+    } else if (imagePrompt) {
+      try {
+        const buf = await generateImage(imagePrompt);
         const path = `${userId}/${crypto.randomUUID()}.png`;
         const { error: upErr } = await supabase.storage
           .from("generated-images")
@@ -720,3 +789,47 @@ export const regenerateImage = createServerFn({ method: "POST" })
       return { ok: false, kind: "error" as const, message: "Image generation failed. Please try again later." };
     }
   });
+
+export const regenerateText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string }) =>
+    z.object({ messageId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: asst } = await supabase
+      .from("messages")
+      .select("id, thread_id, created_at, image_url")
+      .eq("id", data.messageId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!asst) throw new Error("Message not found");
+    if (asst.image_url) return { ok: false, kind: "error" as const, message: "Use image regenerate instead." };
+
+    const profile = await loadProfile(supabase, userId);
+    const usage = await loadOrResetUsage(supabase, userId, profile.plan);
+    if (usage.text_count >= usage.text_limit) {
+      return { ok: false, kind: "limit" as const, message: "Text limit reached." };
+    }
+    const { data: history } = await supabase
+      .from("messages")
+      .select("role, content")
+      .eq("user_id", userId)
+      .eq("thread_id", asst.thread_id)
+      .lt("created_at", asst.created_at)
+      .order("created_at", { ascending: true })
+      .limit(40);
+    try {
+      const text = await generateText(
+        (history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
+      );
+      await supabase.from("messages").update({ content: text }).eq("id", data.messageId);
+      const _admin5 = await adminClient();
+      await _admin5.from("usage").update({ text_count: usage.text_count + 1 }).eq("user_id", userId);
+      return { ok: true, kind: "message" as const, content: text };
+    } catch (e) {
+      console.error("regen text failed:", e);
+      return { ok: false, kind: "error" as const, message: "Regeneration failed. Please try again." };
+    }
+  });
+
