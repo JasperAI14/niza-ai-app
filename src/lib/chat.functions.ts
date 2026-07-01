@@ -598,9 +598,11 @@ export const sendMessage = createServerFn({ method: "POST" })
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
 
     const hasImages = !!data.images && data.images.length > 0;
-    // Image uploads suppress generation intent — analyze the upload instead.
+    // If the user attached image(s) with an edit-style instruction, we route to image editing.
+    const wantsEdit = hasImages && detectImageEdit(data.content);
+    // Text-only image-generation intent
     const imagePrompt = hasImages ? null : detectImageRequest(data.content);
-    const isImage = !!imagePrompt;
+    const isImage = !!imagePrompt || wantsEdit;
 
     if (isImage && usage.image_count >= usage.image_limit) {
       return { ok: false, kind: "limit" as const, message: "Image limit reached. Resets every 5 hours." };
@@ -631,9 +633,29 @@ export const sendMessage = createServerFn({ method: "POST" })
     let imagePath: string | null = null;
     let signedImage: string | null = null;
 
-    if (isImage) {
+    if (wantsEdit) {
       try {
-        const buf = await generateImage(imagePrompt!);
+        const buf = await editImage(data.content, data.images!);
+        const path = `${userId}/${crypto.randomUUID()}.png`;
+        const { error: upErr } = await supabase.storage
+          .from("generated-images")
+          .upload(path, new Uint8Array(buf), { contentType: "image/png" });
+        if (upErr) throw upErr;
+        imagePath = path;
+        const { data: signed } = await supabase.storage
+          .from("generated-images")
+          .createSignedUrl(path, 60 * 60 * 6);
+        signedImage = signed?.signedUrl ?? null;
+        assistantContent = `Here's your edited image:`;
+        const _admE = await adminClient();
+        await _admE.from("usage").update({ image_count: usage.image_count + 1 }).eq("user_id", userId);
+      } catch (e) {
+        console.error("image edit failed:", e);
+        assistantContent = "Sorry, image editing is unavailable right now. Please try again later.";
+      }
+    } else if (imagePrompt) {
+      try {
+        const buf = await generateImage(imagePrompt);
         const path = `${userId}/${crypto.randomUUID()}.png`;
         const { error: upErr } = await supabase.storage
           .from("generated-images")
