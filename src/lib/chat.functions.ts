@@ -789,3 +789,47 @@ export const regenerateImage = createServerFn({ method: "POST" })
       return { ok: false, kind: "error" as const, message: "Image generation failed. Please try again later." };
     }
   });
+
+export const regenerateText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string }) =>
+    z.object({ messageId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: asst } = await supabase
+      .from("messages")
+      .select("id, thread_id, created_at, image_url")
+      .eq("id", data.messageId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!asst) throw new Error("Message not found");
+    if (asst.image_url) return { ok: false, kind: "error" as const, message: "Use image regenerate instead." };
+
+    const profile = await loadProfile(supabase, userId);
+    const usage = await loadOrResetUsage(supabase, userId, profile.plan);
+    if (usage.text_count >= usage.text_limit) {
+      return { ok: false, kind: "limit" as const, message: "Text limit reached." };
+    }
+    const { data: history } = await supabase
+      .from("messages")
+      .select("role, content")
+      .eq("user_id", userId)
+      .eq("thread_id", asst.thread_id)
+      .lt("created_at", asst.created_at)
+      .order("created_at", { ascending: true })
+      .limit(40);
+    try {
+      const text = await generateText(
+        (history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
+      );
+      await supabase.from("messages").update({ content: text }).eq("id", data.messageId);
+      const _admin5 = await adminClient();
+      await _admin5.from("usage").update({ text_count: usage.text_count + 1 }).eq("user_id", userId);
+      return { ok: true, kind: "message" as const, content: text };
+    } catch (e) {
+      console.error("regen text failed:", e);
+      return { ok: false, kind: "error" as const, message: "Regeneration failed. Please try again." };
+    }
+  });
+
