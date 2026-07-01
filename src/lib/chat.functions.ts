@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
-import { detectImageRequest } from "./intent";
+import { detectImageRequest, detectImageEdit } from "./intent";
 
 // ---------- types ----------
 export type DBMessage = {
@@ -423,6 +423,53 @@ async function generateImage(prompt: string): Promise<ArrayBuffer> {
     }
   }
   throw lastErr ?? new Error("all image providers failed");
+}
+
+// Image editing via Lovable Gateway (Gemini 2.5 Flash Image / Nano Banana).
+// Accepts one or more input images (data URLs) and an edit instruction.
+async function callLovableImageEdit(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const content: any[] = [{ type: "text", text: prompt }];
+  for (const url of imageDataUrls) content.push({ type: "image_url", image_url: { url } });
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages: [{ role: "user", content }],
+      modalities: ["image", "text"],
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`lovable image-edit ${r.status} ${t.slice(0, 200)}`);
+  }
+  const j = await r.json();
+  const msg = j?.choices?.[0]?.message;
+  let dataUrl: string | undefined;
+  if (Array.isArray(msg?.images) && msg.images[0]?.image_url?.url) {
+    dataUrl = msg.images[0].image_url.url;
+  } else if (Array.isArray(msg?.content)) {
+    const imgBlock = msg.content.find((c: any) => c?.type === "image_url" || c?.image_url);
+    dataUrl = imgBlock?.image_url?.url;
+  }
+  if (!dataUrl) throw new Error("lovable image-edit empty");
+  if (dataUrl.startsWith("data:")) {
+    const b64 = dataUrl.split(",")[1];
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  const imgR = await fetch(dataUrl);
+  if (!imgR.ok) throw new Error("image-edit fetch " + imgR.status);
+  return await imgR.arrayBuffer();
+}
+
+async function editImage(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
+  // Only Lovable Gemini reliably supports image editing right now.
+  return callLovableImageEdit(prompt, imageDataUrls);
 }
 
 // ---------- SERVER FUNCTIONS ----------
