@@ -17,7 +17,16 @@ export default defineConfig({
         injectRegister: null,
         filename: "sw.js",
         devOptions: { enabled: false },
-        includeAssets: ["favicon.ico", "icon-192.png", "icon-512.png", "icon-maskable-192.png", "icon-maskable-512.png"],
+        includeAssets: [
+          "favicon.ico",
+          "icon-192.png",
+          "icon-512.png",
+          "icon-maskable-192.png",
+          "icon-maskable-512.png",
+          "screenshot-mobile.png",
+          "screenshot-desktop.png",
+          "sw-extras.js",
+        ],
         manifest: false, // we ship public/manifest.webmanifest
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff2}"],
