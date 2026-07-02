@@ -30,6 +30,7 @@ export default defineConfig({
         manifest: false, // we ship public/manifest.webmanifest
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff2}"],
+          importScripts: ["/sw-extras.js"],
           navigateFallback: "/",
           navigateFallbackDenylist: [/^\/_serverFn/, /^\/api/, /^\/~oauth/, /^\/auth/],
           cleanupOutdatedCaches: true,
