@@ -134,6 +134,7 @@ function RootComponent() {
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
     });
+    import("@/lib/register-pwa").then((m) => m.registerPwa()).catch(() => {});
     return () => data.subscription.unsubscribe();
   }, [router, queryClient]);
 
