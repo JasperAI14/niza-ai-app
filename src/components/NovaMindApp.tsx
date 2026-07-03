@@ -235,8 +235,8 @@ export function NovaMindApp() {
     },
     onSuccess: async ({ res, tid }) => {
       if (!res.ok && res.kind === "limit") {
-        toast.error(res.message);
         setOptimistic([]);
+        maybeShowUpgrade(/image/i.test(res.message) ? "image" : "text");
         return;
       }
       await Promise.all([
