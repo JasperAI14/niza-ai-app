@@ -305,6 +305,16 @@ export function NovaMindApp() {
     if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
   }, [usage?.text_count, usage?.image_count]);
 
+  const plan = meQ.data?.profile.plan ?? "free";
+  useEffect(() => {
+    if (!usage || plan === "premium") return;
+    const textBlockedNow = usage.text_count >= usage.text_limit;
+    const imgBlockedNow = usage.image_count >= usage.image_limit;
+    if (textBlockedNow && imgBlockedNow) maybeShowUpgrade("both");
+    else if (textBlockedNow) maybeShowUpgrade("text");
+    else if (imgBlockedNow) maybeShowUpgrade("image");
+  }, [usage?.text_count, usage?.image_count, usage?.text_limit, usage?.image_limit, plan]);
+
   async function handleSend() {
     const text = input.trim();
     if ((!text && attachments.length === 0) || sendMut.isPending) return;
