@@ -605,7 +605,7 @@ export function NovaMindApp() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Message NovaMind AI…  (Enter = new line)"
+                placeholder="Ask NovaMind AI…"
                 rows={1}
                 className="max-h-60 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] outline-none placeholder:text-muted-foreground"
                 disabled={sendMut.isPending || inputBlocked}
