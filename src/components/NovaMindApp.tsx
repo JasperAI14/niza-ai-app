@@ -18,6 +18,7 @@ import {
 } from "@/lib/chat.functions";
 import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-utils";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
+import { UpgradeInlineBanner } from "./UpgradeModal";
 
 const SAMPLES = [
   "Explain async/await in JavaScript",
