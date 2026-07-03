@@ -404,7 +404,6 @@ export function NovaMindApp() {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   }
 
-  const plan = meQ.data?.profile.plan ?? "free";
   const textPct = usage ? Math.min(100, Math.round((usage.text_count / usage.text_limit) * 100)) : 0;
   const imgPct = usage ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100)) : 0;
   const textBlocked = !!usage && usage.text_count >= usage.text_limit;
