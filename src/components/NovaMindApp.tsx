@@ -554,6 +554,7 @@ export function NovaMindApp() {
         </div>
 
         <div className="border-t border-border bg-background p-3 md:p-4">
+          <UpgradeInlineBanner open={!!upgradeReason && plan !== "premium"} reason={upgradeReason ?? undefined} onClose={dismissUpgrade} />
           {inputBlocked && (
             <div className="mx-auto mb-2 max-w-3xl rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
               You've reached your usage limit. It will reset automatically.
