@@ -64,6 +64,7 @@ export function NovaMindApp() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<"text" | "image" | "both" | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
