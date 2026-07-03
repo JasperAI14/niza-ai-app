@@ -510,7 +510,10 @@ export const listThreads = createServerFn({ method: "GET" })
       .select("id, title, updated_at")
       .eq("user_id", userId)
       .order("updated_at", { ascending: false });
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[listThreads] DB error:", error);
+      throw new Error("Failed to load threads. Please try again.");
+    }
     return (data ?? []) as DBThread[];
   });
 
@@ -525,7 +528,10 @@ export const getThreadMessages = createServerFn({ method: "GET" })
       .eq("user_id", userId)
       .eq("thread_id", data.threadId)
       .order("created_at", { ascending: true });
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[getThreadMessages] DB error:", error);
+      throw new Error("Failed to load messages. Please try again.");
+    }
     // sign image URLs
     const out: DBMessage[] = [];
     for (const m of msgs ?? []) {
@@ -550,7 +556,10 @@ export const createThread = createServerFn({ method: "POST" })
       .insert({ user_id: userId, title: "New chat" })
       .select("id, title, updated_at")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[createThread] DB error:", error);
+      throw new Error("Failed to create thread. Please try again.");
+    }
     return data as DBThread;
   });
 
