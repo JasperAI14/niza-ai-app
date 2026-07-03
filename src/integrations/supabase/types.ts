@@ -52,26 +52,68 @@ export type Database = {
           },
         ]
       }
+      payment_events: {
+        Row: {
+          amount_kobo: number | null
+          created_at: string
+          event_type: string
+          id: string
+          raw: Json | null
+          reference: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount_kobo?: number | null
+          created_at?: string
+          event_type: string
+          id?: string
+          raw?: Json | null
+          reference?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount_kobo?: number | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          raw?: Json | null
+          reference?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
           email: string | null
           id: string
+          paystack_customer_code: string | null
+          paystack_subscription_code: string | null
           plan: string
+          plan_expires_at: string | null
+          plan_status: string
           promo_used: boolean
         }
         Insert: {
           created_at?: string
           email?: string | null
           id: string
+          paystack_customer_code?: string | null
+          paystack_subscription_code?: string | null
           plan?: string
+          plan_expires_at?: string | null
+          plan_status?: string
           promo_used?: boolean
         }
         Update: {
           created_at?: string
           email?: string | null
           id?: string
+          paystack_customer_code?: string | null
+          paystack_subscription_code?: string | null
           plan?: string
+          plan_expires_at?: string | null
+          plan_status?: string
           promo_used?: boolean
         }
         Relationships: []
@@ -124,15 +166,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -259,6 +328,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
