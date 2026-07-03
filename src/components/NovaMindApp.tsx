@@ -65,6 +65,25 @@ export function NovaMindApp() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<"text" | "image" | "both" | null>(null);
+
+  function maybeShowUpgrade(reason: "text" | "image" | "both") {
+    try {
+      const until = Number(localStorage.getItem("nm_upgrade_dismissed_until") || "0");
+      if (Date.now() < until) return;
+    } catch {
+      // ignore storage errors
+    }
+    setUpgradeReason(reason);
+  }
+  function dismissUpgrade() {
+    try {
+      // Snooze for 2 hours after dismissal.
+      localStorage.setItem("nm_upgrade_dismissed_until", String(Date.now() + 2 * 60 * 60 * 1000));
+    } catch {
+      // ignore
+    }
+    setUpgradeReason(null);
+  }
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
