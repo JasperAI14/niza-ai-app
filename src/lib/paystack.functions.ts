@@ -241,15 +241,16 @@ export async function activatePremium(opts: {
   const from = base.getTime() > Date.now() ? base : new Date();
   const expires = new Date(from.getTime() + 31 * 24 * 60 * 60 * 1000);
 
-  const update: Record<string, unknown> = {
-    plan: "premium",
-    plan_status: "active",
-    plan_expires_at: expires.toISOString(),
-  };
-  if (opts.customerCode) update.paystack_customer_code = opts.customerCode;
-  if (opts.subscriptionCode) update.paystack_subscription_code = opts.subscriptionCode;
-
-  await supabaseAdmin.from("profiles").update(update).eq("id", opts.userId);
+  await supabaseAdmin
+    .from("profiles")
+    .update({
+      plan: "premium",
+      plan_status: "active",
+      plan_expires_at: expires.toISOString(),
+      ...(opts.customerCode ? { paystack_customer_code: opts.customerCode } : {}),
+      ...(opts.subscriptionCode ? { paystack_subscription_code: opts.subscriptionCode } : {}),
+    })
+    .eq("id", opts.userId);
   await supabaseAdmin.from("payment_events").insert({
     user_id: opts.userId,
     event_type: "premium.activated",
