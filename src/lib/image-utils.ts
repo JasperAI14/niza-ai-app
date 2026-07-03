@@ -96,7 +96,7 @@ export function isInAppWebView(): boolean {
   const ua = navigator.userAgent || "";
   // Android WebView: contains "; wv)" ; many in-app browsers
   if (/; wv\)/i.test(ua)) return true;
-  if (/(FBAN|FBAV|Instagram|Line|Twitter|TikTok|Snapchat|MicroMessenger|WeChat|GSA)/i.test(ua)) return true;
+  if (/(FBAN|FBAV|Instagram|Line|Twitter|TikTok|Snapchat|MicroMessenger|WeChat|GSA|OPiOS|Opera Mini|OPT\/)/i.test(ua)) return true;
   // iOS embedded WebView: iPhone/iPad without Safari token
   if (/iPhone|iPad|iPod/i.test(ua) && !/Safari/i.test(ua)) return true;
   // Generic AppGeyser / Android app hint
