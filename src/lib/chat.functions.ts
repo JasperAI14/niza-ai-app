@@ -556,7 +556,10 @@ export const createThread = createServerFn({ method: "POST" })
       .insert({ user_id: userId, title: "New chat" })
       .select("id, title, updated_at")
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[createThread] DB error:", error);
+      throw new Error("Failed to create thread. Please try again.");
+    }
     return data as DBThread;
   });
 
