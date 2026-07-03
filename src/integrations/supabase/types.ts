@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          id: boolean
+          notes: string | null
+          paystack_plan_amount_kobo: number
+          paystack_plan_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          notes?: string | null
+          paystack_plan_amount_kobo?: number
+          paystack_plan_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: boolean
+          notes?: string | null
+          paystack_plan_amount_kobo?: number
+          paystack_plan_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string

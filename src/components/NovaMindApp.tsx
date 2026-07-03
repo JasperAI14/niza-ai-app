@@ -18,6 +18,7 @@ import {
 } from "@/lib/chat.functions";
 import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-utils";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
+import { UpgradeInlineBanner } from "./UpgradeModal";
 
 const SAMPLES = [
   "Explain async/await in JavaScript",
@@ -63,6 +64,26 @@ export function NovaMindApp() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState<"text" | "image" | "both" | null>(null);
+
+  function maybeShowUpgrade(reason: "text" | "image" | "both") {
+    try {
+      const until = Number(localStorage.getItem("nm_upgrade_dismissed_until") || "0");
+      if (Date.now() < until) return;
+    } catch {
+      // ignore storage errors
+    }
+    setUpgradeReason(reason);
+  }
+  function dismissUpgrade() {
+    try {
+      // Snooze for 2 hours after dismissal.
+      localStorage.setItem("nm_upgrade_dismissed_until", String(Date.now() + 2 * 60 * 60 * 1000));
+    } catch {
+      // ignore
+    }
+    setUpgradeReason(null);
+  }
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -233,8 +254,8 @@ export function NovaMindApp() {
     },
     onSuccess: async ({ res, tid }) => {
       if (!res.ok && res.kind === "limit") {
-        toast.error(res.message);
         setOptimistic([]);
+        maybeShowUpgrade(/image/i.test(res.message) ? "image" : "text");
         return;
       }
       await Promise.all([
@@ -283,6 +304,16 @@ export function NovaMindApp() {
     if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
     if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
   }, [usage?.text_count, usage?.image_count]);
+
+  const plan = meQ.data?.profile.plan ?? "free";
+  useEffect(() => {
+    if (!usage || plan === "premium") return;
+    const textBlockedNow = usage.text_count >= usage.text_limit;
+    const imgBlockedNow = usage.image_count >= usage.image_limit;
+    if (textBlockedNow && imgBlockedNow) maybeShowUpgrade("both");
+    else if (textBlockedNow) maybeShowUpgrade("text");
+    else if (imgBlockedNow) maybeShowUpgrade("image");
+  }, [usage?.text_count, usage?.image_count, usage?.text_limit, usage?.image_limit, plan]);
 
   async function handleSend() {
     const text = input.trim();
@@ -373,7 +404,6 @@ export function NovaMindApp() {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   }
 
-  const plan = meQ.data?.profile.plan ?? "free";
   const textPct = usage ? Math.min(100, Math.round((usage.text_count / usage.text_limit) * 100)) : 0;
   const imgPct = usage ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100)) : 0;
   const textBlocked = !!usage && usage.text_count >= usage.text_limit;
@@ -533,6 +563,7 @@ export function NovaMindApp() {
         </div>
 
         <div className="border-t border-border bg-background p-3 md:p-4">
+          <UpgradeInlineBanner open={!!upgradeReason && plan !== "premium"} reason={upgradeReason ?? undefined} onClose={dismissUpgrade} />
           {inputBlocked && (
             <div className="mx-auto mb-2 max-w-3xl rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
               You've reached your usage limit. It will reset automatically.
