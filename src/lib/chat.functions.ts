@@ -528,7 +528,10 @@ export const getThreadMessages = createServerFn({ method: "GET" })
       .eq("user_id", userId)
       .eq("thread_id", data.threadId)
       .order("created_at", { ascending: true });
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("[getThreadMessages] DB error:", error);
+      throw new Error("Failed to load messages. Please try again.");
+    }
     // sign image URLs
     const out: DBMessage[] = [];
     for (const m of msgs ?? []) {
