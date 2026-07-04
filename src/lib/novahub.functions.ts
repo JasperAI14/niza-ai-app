@@ -73,7 +73,14 @@ export const saveNovaHubConfig = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const update: Record<string, unknown> = {
+    const update: {
+      server_url: string;
+      app_id: string;
+      updated_at: string;
+      updated_by: string;
+      app_secret?: string;
+      webhook_secret?: string;
+    } = {
       server_url: data.server_url,
       app_id: data.app_id,
       updated_at: new Date().toISOString(),
