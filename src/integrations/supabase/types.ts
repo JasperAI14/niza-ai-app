@@ -76,6 +76,42 @@ export type Database = {
           },
         ]
       }
+      nova_hub_config: {
+        Row: {
+          app_id: string | null
+          app_secret: string | null
+          connected_at: string | null
+          id: boolean
+          last_error: string | null
+          server_url: string | null
+          updated_at: string
+          updated_by: string | null
+          webhook_secret: string | null
+        }
+        Insert: {
+          app_id?: string | null
+          app_secret?: string | null
+          connected_at?: string | null
+          id?: boolean
+          last_error?: string | null
+          server_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          webhook_secret?: string | null
+        }
+        Update: {
+          app_id?: string | null
+          app_secret?: string | null
+          connected_at?: string | null
+          id?: boolean
+          last_error?: string | null
+          server_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
       payment_events: {
         Row: {
           amount_kobo: number | null
