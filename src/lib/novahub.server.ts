@@ -24,7 +24,14 @@ export async function loadNovaHubConfig(): Promise<NovaHubConfig | null> {
   return data as NovaHubConfig;
 }
 
-export function isConfigured(cfg: NovaHubConfig | null): cfg is Required<NovaHubConfig> {
+export type LoadedNovaHubConfig = {
+  server_url: string;
+  app_id: string;
+  app_secret: string;
+  webhook_secret: string;
+};
+
+export function isConfigured(cfg: NovaHubConfig | null): cfg is LoadedNovaHubConfig {
   return !!(cfg?.server_url && cfg.app_id && cfg.app_secret && cfg.webhook_secret);
 }
 
