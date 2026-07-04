@@ -15,7 +15,9 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedUpgradeCallbackRouteImport } from './routes/_authenticated/upgrade.callback'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin.payments'
+import { Route as AuthenticatedAdminNovaHubRouteImport } from './routes/_authenticated/admin.nova-hub'
 import { Route as ApiPublicPaystackWebhookRouteImport } from './routes/api/public/paystack/webhook'
+import { Route as ApiPublicNovahubWebhookRouteImport } from './routes/api/public/novahub/webhook'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -48,27 +50,42 @@ const AuthenticatedAdminPaymentsRoute =
     path: '/admin/payments',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminNovaHubRoute =
+  AuthenticatedAdminNovaHubRouteImport.update({
+    id: '/admin/nova-hub',
+    path: '/admin/nova-hub',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicPaystackWebhookRoute =
   ApiPublicPaystackWebhookRouteImport.update({
     id: '/api/public/paystack/webhook',
     path: '/api/public/paystack/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicNovahubWebhookRoute = ApiPublicNovahubWebhookRouteImport.update({
+  id: '/api/public/novahub/webhook',
+  path: '/api/public/novahub/webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
+  '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/': typeof AuthenticatedIndexRoute
+  '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
+  '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
 }
 export interface FileRoutesById {
@@ -77,8 +94,10 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
   '/_authenticated/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
+  '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
 }
 export interface FileRouteTypes {
@@ -87,16 +106,20 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/admin/nova-hub'
     | '/admin/payments'
     | '/upgrade/callback'
+    | '/api/public/novahub/webhook'
     | '/api/public/paystack/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/auth'
     | '/reset-password'
     | '/'
+    | '/admin/nova-hub'
     | '/admin/payments'
     | '/upgrade/callback'
+    | '/api/public/novahub/webhook'
     | '/api/public/paystack/webhook'
   id:
     | '__root__'
@@ -104,8 +127,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/_authenticated/'
+    | '/_authenticated/admin/nova-hub'
     | '/_authenticated/admin/payments'
     | '/_authenticated/upgrade/callback'
+    | '/api/public/novahub/webhook'
     | '/api/public/paystack/webhook'
   fileRoutesById: FileRoutesById
 }
@@ -113,6 +138,7 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiPublicNovahubWebhookRoute: typeof ApiPublicNovahubWebhookRoute
   ApiPublicPaystackWebhookRoute: typeof ApiPublicPaystackWebhookRoute
 }
 
@@ -160,6 +186,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPaymentsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/nova-hub': {
+      id: '/_authenticated/admin/nova-hub'
+      path: '/admin/nova-hub'
+      fullPath: '/admin/nova-hub'
+      preLoaderRoute: typeof AuthenticatedAdminNovaHubRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/paystack/webhook': {
       id: '/api/public/paystack/webhook'
       path: '/api/public/paystack/webhook'
@@ -167,17 +200,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicPaystackWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/novahub/webhook': {
+      id: '/api/public/novahub/webhook'
+      path: '/api/public/novahub/webhook'
+      fullPath: '/api/public/novahub/webhook'
+      preLoaderRoute: typeof ApiPublicNovahubWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedAdminNovaHubRoute: typeof AuthenticatedAdminNovaHubRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
   AuthenticatedUpgradeCallbackRoute: typeof AuthenticatedUpgradeCallbackRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedAdminNovaHubRoute: AuthenticatedAdminNovaHubRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
   AuthenticatedUpgradeCallbackRoute: AuthenticatedUpgradeCallbackRoute,
 }
@@ -189,6 +231,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiPublicNovahubWebhookRoute: ApiPublicNovahubWebhookRoute,
   ApiPublicPaystackWebhookRoute: ApiPublicPaystackWebhookRoute,
 }
 export const routeTree = rootRouteImport
