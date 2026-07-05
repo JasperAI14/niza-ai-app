@@ -5,7 +5,8 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Download, RefreshCw, Loader2, Copy, Share2, Pencil, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { isReusableContent } from "@/lib/intent";
+import { isReusableContent, shouldUseCopyCard } from "@/lib/intent";
+import { CopyCard } from "./CopyCard";
 
 export type UIMessage = {
   id: string;
