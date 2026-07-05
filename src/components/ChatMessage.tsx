@@ -5,7 +5,8 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Download, RefreshCw, Loader2, Copy, Share2, Pencil, Check } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { isReusableContent } from "@/lib/intent";
+import { isReusableContent, shouldUseCopyCard } from "@/lib/intent";
+import { CopyCard } from "./CopyCard";
 
 export type UIMessage = {
   id: string;
@@ -67,7 +68,8 @@ export function ChatMessage({
   const isPendingText = message.pending === "text";
   const isPending = isPendingImage || isPendingText;
   const isPersisted = !message.id.startsWith("p-") && !message.id.startsWith("u-");
-  const showCopy = !isUser && !isPending && !message.image_url && isReusableContent(message.content);
+  const useCopyCard = !isUser && !isPending && !message.image_url && shouldUseCopyCard(message.content);
+  const showCopy = !isUser && !isPending && !message.image_url && !useCopyCard && isReusableContent(message.content);
   const showRegenText = !isUser && !isPending && !message.image_url && !!onRegenerateText && isPersisted;
   const canRegenerateImg = !isUser && !!message.image_url && isPersisted && !!onRegenerate;
   const [copied, setCopied] = useState(false);
@@ -87,8 +89,11 @@ export function ChatMessage({
     <div className="w-full px-3 py-1.5 sm:px-4">
       <div className={`mx-auto flex max-w-3xl ${isUser ? "justify-end" : "justify-start"}`}>
         <div
-          className={`min-w-0 max-w-[85%] sm:max-w-[75%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}
+          className={`min-w-0 ${useCopyCard ? "w-full max-w-full sm:max-w-[85%]" : "max-w-[85%] sm:max-w-[75%]"} ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}
         >
+          {useCopyCard ? (
+            <CopyCard content={message.content} />
+          ) : (
           <div
             className={`inline-block rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed break-words ${
               isUser
@@ -140,6 +145,7 @@ export function ChatMessage({
               </div>
             )}
           </div>
+          )}
 
           {/* Action bar */}
           {!isUser && !isPending && (showCopy || showRegenText || message.image_url) && (

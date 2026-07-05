@@ -55,3 +55,29 @@ export function isReusableContent(text: string): boolean {
   if ((text.match(/\n\s*\n/g) ?? []).length >= 2) return true;
   return false;
 }
+
+// Stricter: should this response be surfaced as a collapsed "copy card"
+// (ChatGPT-style expandable block) instead of a normal chat bubble?
+export function shouldUseCopyCard(text: string): boolean {
+  if (!text) return false;
+  if (/```[\s\S]*?```/.test(text)) return true; // any code block
+  if (text.length >= 500) return true;
+  const lines = text.split("\n");
+  const listy = lines.filter((l) => /^\s*(?:[-*+]\s|\d+\.\s)/.test(l)).length;
+  if (listy >= 4) return true;
+  // multi-heading guide
+  const headings = lines.filter((l) => /^#{1,3}\s/.test(l)).length;
+  if (headings >= 2) return true;
+  return false;
+}
+
+export function copyCardTitle(text: string): "Code" | "Guide" | "Prompt" | "Writing" {
+  const t = text.trim();
+  if (/```/.test(t)) return "Code";
+  if (/^(you are|act as|imagine you are|pretend you are|your task is|write a prompt)/i.test(t)) return "Prompt";
+  if (/^#{1,3}\s/m.test(t)) return "Guide";
+  // numbered step-by-step
+  const stepLines = t.split("\n").filter((l) => /^\s*(?:\d+\.\s|step\s+\d)/i.test(l)).length;
+  if (stepLines >= 3) return "Guide";
+  return "Writing";
+}
