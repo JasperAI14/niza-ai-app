@@ -89,7 +89,9 @@ export function NovaMindApp() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
-  const silenceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micStopRef = useRef<boolean>(false);
+  const micBaseTextRef = useRef<string>("");
+  const micFinalsRef = useRef<Map<number, string>>(new Map());
 
   const MAX_TEXT_FILE_BYTES = 1_000_000;
   const MAX_CHARS = 60_000;
