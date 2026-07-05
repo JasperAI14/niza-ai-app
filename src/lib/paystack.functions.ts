@@ -232,6 +232,18 @@ export async function activatePremium(opts: {
   rawEvent: unknown;
 }) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  // Idempotency: if we've already activated for this reference, do nothing.
+  if (opts.reference) {
+    const { data: dup } = await supabaseAdmin
+      .from("payment_events")
+      .select("id")
+      .eq("event_type", "premium.activated")
+      .eq("reference", opts.reference)
+      .maybeSingle();
+    if (dup) return;
+  }
+
   const { data: current } = await supabaseAdmin
     .from("profiles")
     .select("plan_expires_at")
@@ -251,11 +263,17 @@ export async function activatePremium(opts: {
       ...(opts.subscriptionCode ? { paystack_subscription_code: opts.subscriptionCode } : {}),
     })
     .eq("id", opts.userId);
-  await supabaseAdmin.from("payment_events").insert({
+
+  const { error: insertErr } = await supabaseAdmin.from("payment_events").insert({
     user_id: opts.userId,
     event_type: "premium.activated",
     reference: opts.reference,
     amount_kobo: opts.amountKobo,
     raw: opts.rawEvent as any,
   });
+  // Unique-index race: another concurrent webhook won — safe to swallow.
+  if (insertErr && !String(insertErr.message || "").includes("duplicate")) {
+    throw insertErr;
+  }
 }
+
