@@ -68,7 +68,8 @@ export function ChatMessage({
   const isPendingText = message.pending === "text";
   const isPending = isPendingImage || isPendingText;
   const isPersisted = !message.id.startsWith("p-") && !message.id.startsWith("u-");
-  const showCopy = !isUser && !isPending && !message.image_url && isReusableContent(message.content);
+  const useCopyCard = !isUser && !isPending && !message.image_url && shouldUseCopyCard(message.content);
+  const showCopy = !isUser && !isPending && !message.image_url && !useCopyCard && isReusableContent(message.content);
   const showRegenText = !isUser && !isPending && !message.image_url && !!onRegenerateText && isPersisted;
   const canRegenerateImg = !isUser && !!message.image_url && isPersisted && !!onRegenerate;
   const [copied, setCopied] = useState(false);
