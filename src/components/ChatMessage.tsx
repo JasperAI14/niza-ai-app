@@ -89,8 +89,11 @@ export function ChatMessage({
     <div className="w-full px-3 py-1.5 sm:px-4">
       <div className={`mx-auto flex max-w-3xl ${isUser ? "justify-end" : "justify-start"}`}>
         <div
-          className={`min-w-0 max-w-[85%] sm:max-w-[75%] ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}
+          className={`min-w-0 ${useCopyCard ? "w-full max-w-full sm:max-w-[85%]" : "max-w-[85%] sm:max-w-[75%]"} ${isUser ? "items-end" : "items-start"} flex flex-col gap-1`}
         >
+          {useCopyCard ? (
+            <CopyCard content={message.content} />
+          ) : (
           <div
             className={`inline-block rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed break-words ${
               isUser
