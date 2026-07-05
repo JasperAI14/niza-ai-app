@@ -145,6 +145,7 @@ export function ChatMessage({
               </div>
             )}
           </div>
+          )}
 
           {/* Action bar */}
           {!isUser && !isPending && (showCopy || showRegenText || message.image_url) && (
