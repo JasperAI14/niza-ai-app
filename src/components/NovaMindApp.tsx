@@ -348,47 +348,93 @@ export function NovaMindApp() {
   }
 
   // ---------- Voice-to-text (Web Speech API) ----------
-  function toggleMic() {
-    if (typeof window === "undefined") return;
-    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { toast.error("Voice input isn't supported in this browser."); return; }
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
+  // Robust against duplicates: each result index is stored once in a Map, so a
+  // browser re-emitting the same final result never appends twice. Auto-restarts
+  // on `onend` to support long dictation; stops instantly when the user taps.
+  function commitTranscriptFromResults(e: any) {
+    let interim = "";
+    for (let i = 0; i < e.results.length; i++) {
+      const t = String(e.results[i][0].transcript ?? "");
+      if (e.results[i].isFinal) {
+        micFinalsRef.current.set(i, t.trim());
+      } else {
+        interim += t;
+      }
     }
+    const finalText = Array.from(micFinalsRef.current.values()).filter(Boolean).join(" ");
+    const combined = [micBaseTextRef.current, finalText, interim]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+([.,!?;:])/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+    setInput(combined);
+  }
+
+  function stopMicNow() {
+    micStopRef.current = true;
+    setListening(false);
+    const rec = recognitionRef.current;
+    if (!rec) return;
+    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
+    try { rec.abort(); } catch {}
+    try { rec.stop(); } catch {}
+  }
+
+  function startRecognition() {
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
     const rec = new SR();
     rec.lang = navigator.language || "en-US";
     rec.interimResults = true;
     rec.continuous = true;
-    const baseText = input;
-    let finalAppend = "";
-    rec.onresult = (e: any) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) finalAppend += t + " ";
-        else interim += t;
+    (rec as any).maxAlternatives = 1;
+    rec.onresult = commitTranscriptFromResults;
+    rec.onerror = (ev: any) => {
+      // "no-speech" / "aborted" are normal — let onend handle restart.
+      if (ev?.error === "not-allowed" || ev?.error === "service-not-allowed") {
+        toast.error("Microphone access denied.");
+        micStopRef.current = true;
+        setListening(false);
       }
-      setInput(((baseText + " " + finalAppend + interim).trim().replace(/\s+/g, " ")));
-      if (silenceTimer.current) clearTimeout(silenceTimer.current);
-      silenceTimer.current = setTimeout(() => { try { rec.stop(); } catch {} }, 3000);
     };
-    rec.onerror = () => setListening(false);
     rec.onend = () => {
-      setListening(false);
-      if (silenceTimer.current) { clearTimeout(silenceTimer.current); silenceTimer.current = null; }
+      // Fold the current session's finals into the base so the next session
+      // starts fresh (with a new resultIndex space) and cannot re-emit them.
+      const finalText = Array.from(micFinalsRef.current.values()).filter(Boolean).join(" ");
+      micBaseTextRef.current = [micBaseTextRef.current, finalText].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+      micFinalsRef.current = new Map();
+      if (micStopRef.current) { setListening(false); return; }
+      // Auto-restart for long dictation / flaky networks.
+      try { rec.start(); } catch { setListening(false); }
     };
     recognitionRef.current = rec;
     try {
       rec.start();
       setListening(true);
-    } catch { toast.error("Couldn't start microphone."); }
+    } catch {
+      toast.error("Couldn't start microphone.");
+      setListening(false);
+    }
+  }
+
+  function toggleMic() {
+    if (typeof window === "undefined") return;
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { toast.error("Voice input isn't supported in this browser."); return; }
+    if (listening) { stopMicNow(); return; }
+    micStopRef.current = false;
+    micFinalsRef.current = new Map();
+    micBaseTextRef.current = input.trim();
+    startRecognition();
   }
 
   useEffect(() => () => {
+    micStopRef.current = true;
+    try { recognitionRef.current?.abort(); } catch {}
     try { recognitionRef.current?.stop(); } catch {}
-    if (silenceTimer.current) clearTimeout(silenceTimer.current);
   }, []);
+
 
   async function signOut() {
     await qc.cancelQueries();
