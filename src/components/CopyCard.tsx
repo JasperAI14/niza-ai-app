@@ -152,6 +152,17 @@ export function CopyCard({ content }: { content: string }) {
           >
             <Share2 className="h-3 w-3" /> Share
           </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadText(content, detectFilename(content, title));
+              toast.success("File downloaded.");
+            }}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            aria-label="Download"
+          >
+            <Download className="h-3 w-3" /> Download
+          </button>
         </div>
       </div>
 
