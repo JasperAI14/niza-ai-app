@@ -90,8 +90,9 @@ export function NovaMindApp() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const micStopRef = useRef<boolean>(false);
-  const micBaseTextRef = useRef<string>("");
-  const micFinalsRef = useRef<Map<number, string>>(new Map());
+  const micBaseRef = useRef<string>("");   // text present before mic started
+  const micFinalRef = useRef<string>("");  // finalized speech text (append-only)
+  const micSessionRef = useRef<number>(0); // invalidates stale event handlers
 
   const MAX_TEXT_FILE_BYTES = 1_000_000;
   const MAX_CHARS = 60_000;
@@ -348,21 +349,14 @@ export function NovaMindApp() {
   }
 
   // ---------- Voice-to-text (Web Speech API) ----------
-  // Robust against duplicates: each result index is stored once in a Map, so a
-  // browser re-emitting the same final result never appends twice. Auto-restarts
-  // on `onend` to support long dictation; stops instantly when the user taps.
-  function commitTranscriptFromResults(e: any) {
-    let interim = "";
-    for (let i = 0; i < e.results.length; i++) {
-      const t = String(e.results[i][0].transcript ?? "");
-      if (e.results[i].isFinal) {
-        micFinalsRef.current.set(i, t.trim());
-      } else {
-        interim += t;
-      }
-    }
-    const finalText = Array.from(micFinalsRef.current.values()).filter(Boolean).join(" ");
-    const combined = [micBaseTextRef.current, finalText, interim]
+  // Duplication-proof design:
+  //  - One SpeechRecognition instance per session (fresh resultIndex space).
+  //  - Per-session `seen` Set keyed by resultIndex; each final counted once.
+  //  - micSessionRef token invalidates stale onresult/onend from prior instances.
+  //  - Auto-restart on onend spawns a NEW instance (never restarts the old one).
+  function updateInputFromMic(interim: string) {
+    const combined = [micBaseRef.current, micFinalRef.current, interim]
+      .map((s) => s.trim())
       .filter(Boolean)
       .join(" ")
       .replace(/\s+([.,!?;:])/g, "$1")
@@ -371,17 +365,7 @@ export function NovaMindApp() {
     setInput(combined);
   }
 
-  function stopMicNow() {
-    micStopRef.current = true;
-    setListening(false);
-    const rec = recognitionRef.current;
-    if (!rec) return;
-    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
-    try { rec.abort(); } catch {}
-    try { rec.stop(); } catch {}
-  }
-
-  function startRecognition() {
+  function startMicSession() {
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
     const rec = new SR();
@@ -389,33 +373,64 @@ export function NovaMindApp() {
     rec.interimResults = true;
     rec.continuous = true;
     (rec as any).maxAlternatives = 1;
-    rec.onresult = commitTranscriptFromResults;
+
+    const sessionId = ++micSessionRef.current;
+    const seen = new Set<number>();
+
+    rec.onresult = (e: any) => {
+      if (sessionId !== micSessionRef.current) return; // stale — ignore
+      let interim = "";
+      const start = typeof e.resultIndex === "number" ? e.resultIndex : 0;
+      for (let i = start; i < e.results.length; i++) {
+        const res = e.results[i];
+        const t = String(res[0]?.transcript ?? "");
+        if (res.isFinal) {
+          if (!seen.has(i)) {
+            seen.add(i);
+            micFinalRef.current = (micFinalRef.current + " " + t).replace(/\s+/g, " ").trim();
+          }
+        } else {
+          interim += t;
+        }
+      }
+      updateInputFromMic(interim);
+    };
+
     rec.onerror = (ev: any) => {
-      // "no-speech" / "aborted" are normal — let onend handle restart.
       if (ev?.error === "not-allowed" || ev?.error === "service-not-allowed") {
         toast.error("Microphone access denied.");
         micStopRef.current = true;
+        micSessionRef.current++;
         setListening(false);
       }
+      // Other errors (no-speech, aborted, network) — onend will handle restart.
     };
+
     rec.onend = () => {
-      // Fold the current session's finals into the base so the next session
-      // starts fresh (with a new resultIndex space) and cannot re-emit them.
-      const finalText = Array.from(micFinalsRef.current.values()).filter(Boolean).join(" ");
-      micBaseTextRef.current = [micBaseTextRef.current, finalText].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-      micFinalsRef.current = new Map();
+      if (sessionId !== micSessionRef.current) return; // stale — ignore
       if (micStopRef.current) { setListening(false); return; }
-      // Auto-restart for long dictation / flaky networks.
-      try { rec.start(); } catch { setListening(false); }
+      // Fresh instance so resultIndex resets cleanly. No re-emission of old finals.
+      startMicSession();
     };
+
     recognitionRef.current = rec;
     try {
       rec.start();
-      setListening(true);
     } catch {
-      toast.error("Couldn't start microphone.");
-      setListening(false);
+      // Rapid toggle can throw "already started" — safe to ignore; onend restarts.
     }
+  }
+
+  function stopMicNow() {
+    micStopRef.current = true;
+    micSessionRef.current++; // invalidate any in-flight onresult/onend
+    setListening(false);
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
+    try { rec.abort(); } catch {}
+    try { rec.stop(); } catch {}
   }
 
   function toggleMic() {
@@ -424,16 +439,23 @@ export function NovaMindApp() {
     if (!SR) { toast.error("Voice input isn't supported in this browser."); return; }
     if (listening) { stopMicNow(); return; }
     micStopRef.current = false;
-    micFinalsRef.current = new Map();
-    micBaseTextRef.current = input.trim();
-    startRecognition();
+    micBaseRef.current = input.trim();
+    micFinalRef.current = "";
+    setListening(true);
+    startMicSession();
   }
 
   useEffect(() => () => {
     micStopRef.current = true;
-    try { recognitionRef.current?.abort(); } catch {}
-    try { recognitionRef.current?.stop(); } catch {}
+    micSessionRef.current++;
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
+    try { rec.abort(); } catch {}
+    try { rec.stop(); } catch {}
   }, []);
+
 
 
   async function signOut() {
