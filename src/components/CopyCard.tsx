@@ -3,9 +3,51 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Copy, Share2, Check, X, FileText, Code2, BookOpen, MessageSquareQuote, ChevronDown } from "lucide-react";
+import { Copy, Share2, Check, X, FileText, Code2, BookOpen, MessageSquareQuote, ChevronDown, Download } from "lucide-react";
 import { toast } from "sonner";
 import { copyCardTitle } from "@/lib/intent";
+
+// Map fenced-code language → file extension. Falls back to .txt.
+const LANG_EXT: Record<string, string> = {
+  javascript: "js", js: "js", jsx: "jsx", typescript: "ts", ts: "ts", tsx: "tsx",
+  python: "py", py: "py", ruby: "rb", rb: "rb", go: "go", rust: "rs", rs: "rs",
+  java: "java", kotlin: "kt", swift: "swift", c: "c", cpp: "cpp", "c++": "cpp",
+  cs: "cs", csharp: "cs", php: "php", sh: "sh", bash: "sh", zsh: "sh",
+  html: "html", css: "css", scss: "scss", json: "json", yaml: "yml", yml: "yml",
+  toml: "toml", xml: "xml", sql: "sql", md: "md", markdown: "md", tex: "tex",
+};
+
+function detectFilename(content: string, title: string): string {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const codeMatch = /```(\w+)?/.exec(content);
+  if (title === "Code" && codeMatch) {
+    const ext = LANG_EXT[(codeMatch[1] || "").toLowerCase()] || "txt";
+    return `novamind-${stamp}.${ext}`;
+  }
+  if (title === "Guide" || /^#{1,3}\s/m.test(content)) return `novamind-${stamp}.md`;
+  if (title === "Prompt") return `novamind-prompt-${stamp}.txt`;
+  return `novamind-${stamp}.txt`;
+}
+
+function downloadText(content: string, filename: string) {
+  // If Code with a single fenced block, download just the code body.
+  let body = content;
+  const single = /^```(?:\w+)?\n([\s\S]*?)```\s*$/.exec(content.trim());
+  if (single && filename.endsWith(".js") === false && !filename.endsWith(".md") && !filename.endsWith(".txt")) {
+    body = single[1];
+  } else if (single && !filename.endsWith(".md") && !filename.endsWith(".txt")) {
+    body = single[1];
+  }
+  const blob = new Blob([body], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
 
 async function nativeShare(text: string) {
   try {
@@ -110,6 +152,17 @@ export function CopyCard({ content }: { content: string }) {
           >
             <Share2 className="h-3 w-3" /> Share
           </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadText(content, detectFilename(content, title));
+              toast.success("File downloaded.");
+            }}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            aria-label="Download"
+          >
+            <Download className="h-3 w-3" /> Download
+          </button>
         </div>
       </div>
 
@@ -137,6 +190,18 @@ export function CopyCard({ content }: { content: string }) {
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadText(content, detectFilename(content, title));
+                toast.success("File downloaded.");
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:bg-accent"
+              aria-label="Download"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Download</span>
             </button>
             <button
               onClick={share}
