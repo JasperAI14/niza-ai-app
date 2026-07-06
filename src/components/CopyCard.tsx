@@ -181,6 +181,18 @@ export function CopyCard({ content }: { content: string }) {
               <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
             </button>
             <button
+              onClick={(e) => {
+                e.stopPropagation();
+                downloadText(content, detectFilename(content, title));
+                toast.success("File downloaded.");
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:bg-accent"
+              aria-label="Download"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Download</span>
+            </button>
+            <button
               onClick={share}
               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs transition hover:bg-accent"
               aria-label="Share"
