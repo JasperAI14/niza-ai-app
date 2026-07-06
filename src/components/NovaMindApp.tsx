@@ -90,8 +90,9 @@ export function NovaMindApp() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const micStopRef = useRef<boolean>(false);
-  const micBaseTextRef = useRef<string>("");
-  const micFinalsRef = useRef<Map<number, string>>(new Map());
+  const micBaseRef = useRef<string>("");   // text present before mic started
+  const micFinalRef = useRef<string>("");  // finalized speech text (append-only)
+  const micSessionRef = useRef<number>(0); // invalidates stale event handlers
 
   const MAX_TEXT_FILE_BYTES = 1_000_000;
   const MAX_CHARS = 60_000;
