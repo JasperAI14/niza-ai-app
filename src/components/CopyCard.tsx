@@ -115,12 +115,14 @@ export function CopyCard({ content }: { content: string }) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-background/98 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex flex-col bg-background/98 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-200"
           role="dialog"
           aria-modal="true"
           aria-label={title}
+          style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
         >
           <div className="flex items-center gap-2 border-b border-border px-3 py-2.5 sm:px-4">
+
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
               <Icon className="h-4 w-4" />
             </div>
