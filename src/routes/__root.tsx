@@ -94,8 +94,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "NovaMind AI — Chat, Code & Images" },
       { name: "twitter:description", content: "NovaMind AI is a full-stack web application that acts as a unified AI assistant." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/PUTCwouQidhTLghAVDPz9NLSoC52/social-images/social-1783445661851-file_00000000a66071f6804c27115f1d3388.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/PUTCwouQidhTLghAVDPz9NLSoC52/social-images/social-1783445661851-file_00000000a66071f6804c27115f1d3388.webp" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/PUTCwouQidhTLghAVDPz9NLSoC52/social-images/social-1783445966339-file_00000000a66071f6804c27115f1d3388.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/PUTCwouQidhTLghAVDPz9NLSoC52/social-images/social-1783445966339-file_00000000a66071f6804c27115f1d3388.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
