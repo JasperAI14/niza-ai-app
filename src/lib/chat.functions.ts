@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
-import { detectImageRequest, detectImageEdit } from "./intent";
+import { detectImageRequest, detectImageEdit, detectMusicRequest } from "./intent";
 
 // ---------- types ----------
 export type DBMessage = {
@@ -11,6 +11,9 @@ export type DBMessage = {
   role: "user" | "assistant";
   content: string;
   image_url: string | null;
+  audio_url?: string | null;
+  watermarked?: boolean;
+  edited?: boolean;
   created_at: string;
 };
 
