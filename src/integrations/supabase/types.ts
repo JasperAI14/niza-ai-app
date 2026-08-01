@@ -40,31 +40,43 @@ export type Database = {
       }
       messages: {
         Row: {
+          audio_url: string | null
           content: string
           created_at: string
+          edited: boolean
+          edited_at: string | null
           id: string
           image_url: string | null
           role: string
           thread_id: string
           user_id: string
+          watermarked: boolean
         }
         Insert: {
+          audio_url?: string | null
           content?: string
           created_at?: string
+          edited?: boolean
+          edited_at?: string | null
           id?: string
           image_url?: string | null
           role: string
           thread_id: string
           user_id: string
+          watermarked?: boolean
         }
         Update: {
+          audio_url?: string | null
           content?: string
           created_at?: string
+          edited?: boolean
+          edited_at?: string | null
           id?: string
           image_url?: string | null
           role?: string
           thread_id?: string
           user_id?: string
+          watermarked?: boolean
         }
         Relationships: [
           {
@@ -75,6 +87,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      music_history: {
+        Row: {
+          audio_path: string
+          created_at: string
+          id: string
+          prompt: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          audio_path: string
+          created_at?: string
+          id?: string
+          prompt?: string
+          title?: string
+          user_id: string
+        }
+        Update: {
+          audio_path?: string
+          created_at?: string
+          id?: string
+          prompt?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       nova_hub_config: {
         Row: {
