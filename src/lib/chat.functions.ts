@@ -608,7 +608,8 @@ export const getMe = createServerFn({ method: "GET" })
     const { supabase, userId } = context as any;
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
-    return { profile, usage };
+    const isAdmin = await isAdminUser(supabase, userId, profile.email);
+    return { profile, usage, isAdmin };
   });
 
 export const submitPromo = createServerFn({ method: "POST" })
