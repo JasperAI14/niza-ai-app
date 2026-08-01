@@ -99,68 +99,130 @@ async function adminClient() {
   return supabaseAdmin;
 }
 
-// ---------- AI providers (text) ----------
-type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
-const SYSTEM_PROMPT = `You are NovaMind AI, a helpful, friendly, capable assistant. Excellent at conversation, coding, debugging, tutoring, and problem solving. Format code in fenced markdown blocks with language tags. Be concise but thorough.`;
+// ============================================================
+// NOVA MODEL ROUTING
+// Internal engine names are never exposed to end users.
+//   Nova Chat 1.0   -> Grok (xAI)                  [GROK_API_KEY]
+//   Nova Chat 1.1   -> Gemini 2.5 Flash            [GeminichatAPI]
+//   Nova Vision 2.0 -> Gemini 2.5 Flash Image      [GeminiphotoAPI]
+//   Nova Vision 2.1 -> FLUX.1 / SDXL Inpainting    [HUGGINGFACE_API_KEY]
+//   Nova Music 3.0  -> lyria-3-preview             [GeminimusicAPI]
+//   Nova Music 3.1  -> lyria-3-pro-preview         [GeminimusicAPI]
+// Lovable AI Gateway is kept as a silent last-resort fallback.
+// ============================================================
 
-async function callGroq(messages: ChatMsg[]): Promise<string> {
-  const key = process.env.GROK_API_KEY;
-  if (!key) throw new Error("no groq key");
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      temperature: 0.7,
-    }),
-  });
-  if (!r.ok) throw new Error("groq " + r.status);
-  const j = await r.json();
-  const txt = j.choices?.[0]?.message?.content;
-  if (!txt) throw new Error("groq empty");
-  return txt;
+type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
+const SYSTEM_PROMPT = `You are NovaMind AI, a helpful, friendly, capable assistant. Excellent at conversation, coding, debugging, tutoring, and problem solving. Format code in fenced markdown blocks with language tags. Be concise but thorough. Never reveal the names of underlying model providers or model IDs.`;
+
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+function b64ToBuffer(b64: string): ArrayBuffer {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }
 
-async function callGemini(messages: ChatMsg[]): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("no gemini key");
+function bufferToB64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+function dataUrlParts(dataUrl: string): { mimeType: string; data: string } {
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl);
+  if (!m) throw new Error("bad data url");
+  return { mimeType: m[1], data: m[2] };
+}
+
+// ---------------- Nova Chat 1.0 (Grok / xAI) ----------------
+async function novaChat10(messages: ChatMsg[]): Promise<string> {
+  const key = process.env.GROK_API_KEY;
+  if (!key) throw new Error("nova-chat-1.0: no key");
+  const body = JSON.stringify({
+    model: "grok-3",
+    messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+    temperature: 0.7,
+  });
+  // xAI first; some deployments provision this key against the Groq API instead.
+  const attempts: Array<{ url: string; body: string }> = [
+    { url: "https://api.x.ai/v1/chat/completions", body },
+    {
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+        temperature: 0.7,
+      }),
+    },
+  ];
+  let lastErr: any = null;
+  for (const a of attempts) {
+    try {
+      const r = await fetch(a.url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: a.body,
+      });
+      if (!r.ok) throw new Error(`${r.status}`);
+      const j = await r.json();
+      const txt = j.choices?.[0]?.message?.content;
+      if (!txt) throw new Error("empty");
+      return txt;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr ?? new Error("nova-chat-1.0 failed");
+}
+
+// ---------------- Nova Chat 1.1 (Gemini 2.5 Flash) ----------------
+async function geminiGenerate(
+  key: string,
+  model: string,
+  contents: any[],
+  extra: Record<string, any> = {},
+): Promise<any> {
+  const r = await fetch(`${GEMINI_BASE}/models/${model}:generateContent?key=${key}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contents, ...extra }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`${model} ${r.status} ${t.slice(0, 160)}`);
+  }
+  return r.json();
+}
+
+async function novaChat11(messages: ChatMsg[]): Promise<string> {
+  const key = process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("nova-chat-1.1: no key");
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
   }));
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents,
-      }),
-    },
-  );
-  if (!r.ok) throw new Error("gemini " + r.status);
-  const j = await r.json();
-  const txt = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join("");
-  if (!txt) throw new Error("gemini empty");
+  const j = await geminiGenerate(key, "gemini-2.5-flash", contents, {
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+  });
+  const txt = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("");
+  if (!txt) throw new Error("nova-chat-1.1 empty");
   return txt;
 }
 
+// ---------------- Text fallbacks ----------------
 async function callHuggingFaceText(messages: ChatMsg[]): Promise<string> {
   const key = process.env.HUGGINGFACE_API_KEY;
   if (!key) throw new Error("no hf key");
-  const r = await fetch(
-    "https://router.huggingface.co/v1/chat/completions",
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "meta-llama/Llama-3.1-8B-Instruct:novita",
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      }),
-    },
-  );
+  const r = await fetch("https://router.huggingface.co/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "meta-llama/Llama-3.1-8B-Instruct:novita",
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+    }),
+  });
   if (!r.ok) throw new Error("hf " + r.status);
   const j = await r.json();
   const txt = j.choices?.[0]?.message?.content;
@@ -176,7 +238,7 @@ async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://novamind.lovable.app",
+      "HTTP-Referer": "https://pixel-text-ai.lovable.app",
       "X-Title": "NovaMind AI",
     },
     body: JSON.stringify({
@@ -184,55 +246,188 @@ async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
       messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
     }),
   });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`openrouter ${r.status} ${t.slice(0, 200)}`);
-  }
+  if (!r.ok) throw new Error(`openrouter ${r.status}`);
   const j = await r.json();
   const txt = j.choices?.[0]?.message?.content;
   if (!txt) throw new Error("openrouter empty");
   return txt;
 }
 
-// Vision: pass text + image data URLs to a multimodal model via Lovable Gateway.
-async function callLovableVision(text: string, images: string[]): Promise<string> {
+async function callLovableText(messages: ChatMsg[]): Promise<string> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("no lovable key");
-  const content: any[] = [{ type: "text", text: text || "Please analyze the attached image(s)." }];
-  for (const url of images) content.push({ type: "image_url", image_url: { url } });
   const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content }],
+      model: "google/gemini-3.6-flash",
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
     }),
   });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`lovable vision ${r.status} ${t.slice(0, 200)}`);
-  }
+  if (!r.ok) throw new Error(`lovable text ${r.status}`);
   const j = await r.json();
   const txt = j.choices?.[0]?.message?.content;
-  if (!txt) throw new Error("lovable vision empty");
-  return typeof txt === "string" ? txt : JSON.stringify(txt);
+  if (!txt) throw new Error("lovable text empty");
+  return txt;
 }
 
 async function generateText(messages: ChatMsg[]): Promise<string> {
-  const providers = [callGroq, callGemini, callOpenRouterText, callHuggingFaceText];
+  const providers: Array<[string, (m: ChatMsg[]) => Promise<string>]> = [
+    ["nova-chat-1.0", novaChat10],
+    ["nova-chat-1.1", novaChat11],
+    ["gateway", callLovableText],
+    ["openrouter", callOpenRouterText],
+    ["hf", callHuggingFaceText],
+  ];
   let lastErr: any = null;
-  for (const p of providers) {
+  for (const [name, p] of providers) {
     try {
       return await p(messages);
     } catch (e) {
       lastErr = e;
-      console.error("text provider failed:", (e as Error).message);
+      console.error(`[text] ${name} failed:`, (e as Error).message);
     }
   }
   throw lastErr ?? new Error("all text providers failed");
 }
 
-// ---------- AI providers (image) ----------
+// ---------------- Vision (analysis) ----------------
+async function novaVisionAnalyze(text: string, images: string[]): Promise<string> {
+  const key = process.env.GeminiphotoAPI || process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
+  if (key) {
+    try {
+      const parts: any[] = [{ text: text || "Please analyze the attached image(s)." }];
+      for (const url of images) parts.push({ inlineData: dataUrlParts(url) });
+      const j = await geminiGenerate(key, "gemini-2.5-flash", [{ role: "user", parts }], {
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      });
+      const txt = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("");
+      if (txt) return txt;
+    } catch (e) {
+      console.error("[vision] gemini failed:", (e as Error).message);
+    }
+  }
+  const lkey = process.env.LOVABLE_API_KEY;
+  if (!lkey) throw new Error("vision unavailable");
+  const content: any[] = [{ type: "text", text: text || "Please analyze the attached image(s)." }];
+  for (const url of images) content.push({ type: "image_url", image_url: { url } });
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${lkey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content }],
+    }),
+  });
+  if (!r.ok) throw new Error(`vision gateway ${r.status}`);
+  const j = await r.json();
+  const txt = j.choices?.[0]?.message?.content;
+  if (!txt) throw new Error("vision empty");
+  return typeof txt === "string" ? txt : JSON.stringify(txt);
+}
+
+// ---------------- Nova Vision 2.0 (Gemini image) ----------------
+function extractInlineImage(j: any): ArrayBuffer {
+  const parts = j?.candidates?.[0]?.content?.parts ?? [];
+  for (const p of parts) {
+    const d = p?.inlineData?.data ?? p?.inline_data?.data;
+    if (d) return b64ToBuffer(d);
+  }
+  throw new Error("no image in response");
+}
+
+async function novaVision20(prompt: string, inputImages: string[] = []): Promise<ArrayBuffer> {
+  const key = process.env.GeminiphotoAPI || process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("nova-vision-2.0: no key");
+  const parts: any[] = [{ text: prompt }];
+  for (const url of inputImages) parts.push({ inlineData: dataUrlParts(url) });
+  const j = await geminiGenerate(key, "gemini-2.5-flash-image", [{ role: "user", parts }], {
+    generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+  });
+  return extractInlineImage(j);
+}
+
+// ---------------- Nova Vision 2.1 (FLUX.1 / SDXL Inpainting) ----------------
+async function novaVision21(prompt: string): Promise<ArrayBuffer> {
+  const key = process.env.HUGGINGFACE_API_KEY;
+  if (!key) throw new Error("nova-vision-2.1: no key");
+  const endpoints = [
+    "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+    "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
+    "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
+  ];
+  let lastErr: any = null;
+  for (const url of endpoints) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "image/png" },
+        body: JSON.stringify({ inputs: prompt }),
+      });
+      if (!r.ok) {
+        lastErr = new Error(`hf ${r.status}`);
+        continue;
+      }
+      return await r.arrayBuffer();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr ?? new Error("nova-vision-2.1 failed");
+}
+
+// SDXL inpainting / image-to-image editing fallback.
+async function novaVision21Edit(prompt: string, imageDataUrl: string): Promise<ArrayBuffer> {
+  const key = process.env.HUGGINGFACE_API_KEY;
+  if (!key) throw new Error("nova-vision-2.1: no key");
+  const { data } = dataUrlParts(imageDataUrl);
+  const r = await fetch(
+    "https://api-inference.huggingface.co/models/diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "image/png" },
+      body: JSON.stringify({ inputs: prompt, image: data }),
+    },
+  );
+  if (!r.ok) throw new Error(`hf inpaint ${r.status}`);
+  return r.arrayBuffer();
+}
+
+// ---------------- Gateway image fallbacks ----------------
+async function gatewayGptImage(prompt: string): Promise<ArrayBuffer> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "openai/gpt-image-2", prompt, size: "1024x1024", quality: "low", n: 1 }),
+  });
+  if (!r.ok) throw new Error(`gateway gpt-image ${r.status}`);
+  const j = await r.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("gateway gpt-image empty");
+  return b64ToBuffer(b64);
+}
+
+async function gatewayGeminiImage(prompt: string): Promise<ArrayBuffer> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) throw new Error("no lovable key");
+  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash-image",
+      messages: [{ role: "user", content: prompt }],
+      modalities: ["image", "text"],
+    }),
+  });
+  if (!r.ok) throw new Error(`gateway gemini-image ${r.status}`);
+  const j = await r.json();
+  const b64 = j?.data?.[0]?.b64_json;
+  if (!b64) throw new Error("gateway gemini-image empty");
+  return b64ToBuffer(b64);
+}
+
 async function callStability(prompt: string): Promise<ArrayBuffer> {
   const key = process.env.STABILITY_API_KEY;
   if (!key) throw new Error("no stability");
@@ -245,189 +440,33 @@ async function callStability(prompt: string): Promise<ArrayBuffer> {
     headers: { Authorization: `Bearer ${key}`, Accept: "image/*" },
     body: form,
   });
-  if (!r.ok) {
-    const txt = await r.text().catch(() => "");
-    throw new Error(`stability ${r.status} ${txt.slice(0, 200)}`);
-  }
+  if (!r.ok) throw new Error(`stability ${r.status}`);
   return r.arrayBuffer();
 }
 
-async function callHuggingFaceImage(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.HUGGINGFACE_API_KEY;
-  if (!key) throw new Error("no hf key");
-  // Try a couple of well-known SDXL endpoints; HF inference availability fluctuates.
-  const models = [
-    "stabilityai/stable-diffusion-xl-base-1.0",
-    "black-forest-labs/FLUX.1-schnell",
-  ];
-  let lastErr: any = null;
-  for (const m of models) {
-    try {
-      const r = await fetch(`https://api-inference.huggingface.co/models/${m}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "image/png" },
-        body: JSON.stringify({ inputs: prompt }),
-      });
-      if (!r.ok) {
-        lastErr = new Error(`hf ${m} ${r.status}`);
-        continue;
-      }
-      return await r.arrayBuffer();
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr ?? new Error("hf image failed");
-}
-
-async function callLovableGptImage(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("no lovable key");
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "openai/gpt-image-2",
-      prompt,
-      size: "1024x1024",
-      quality: "low",
-      n: 1,
-    }),
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`lovable gpt-image-2 ${r.status} ${t.slice(0, 200)}`);
-  }
-  const j = await r.json();
-  const b64 = j?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("lovable gpt-image-2 empty");
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes.buffer;
-}
-
-async function callLovableGeminiImage(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("no lovable key");
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    }),
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`lovable gemini-img ${r.status} ${t.slice(0, 200)}`);
-  }
-  const j = await r.json();
-  const b64 = j?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("lovable gemini-img empty");
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes.buffer;
-}
-
-
-async function callOpenAIImage(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("no openai key");
-  const r = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "gpt-image-1",
-      prompt,
-      size: "1024x1024",
-      n: 1,
-    }),
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`openai img ${r.status} ${t.slice(0, 200)}`);
-  }
-  const j = await r.json();
-  const b64 = j?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("openai img empty");
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes.buffer;
-}
-
-async function callOpenRouterImage(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("no openrouter key");
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://novamind.lovable.app",
-      "X-Title": "NovaMind AI",
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image-preview",
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    }),
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`openrouter img ${r.status} ${t.slice(0, 200)}`);
-  }
-  const j = await r.json();
-  const msg = j?.choices?.[0]?.message;
-  let dataUrl: string | undefined;
-  if (Array.isArray(msg?.images) && msg.images[0]?.image_url?.url) {
-    dataUrl = msg.images[0].image_url.url;
-  } else if (Array.isArray(msg?.content)) {
-    const imgBlock = msg.content.find((c: any) => c?.type === "image_url" || c?.image_url);
-    dataUrl = imgBlock?.image_url?.url;
-  }
-  if (!dataUrl) throw new Error("openrouter img empty: " + JSON.stringify(j).slice(0, 200));
-  if (dataUrl.startsWith("data:")) {
-    const b64 = dataUrl.split(",")[1];
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return bytes.buffer;
-  }
-  const imgR = await fetch(dataUrl);
-  if (!imgR.ok) throw new Error("openrouter img fetch " + imgR.status);
-  return await imgR.arrayBuffer();
-}
-
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
-  const providers: Array<{ name: string; fn: (p: string) => Promise<ArrayBuffer> }> = [
-    { name: "lovable-gpt-image-2", fn: callLovableGptImage },
-    { name: "lovable-gemini-image", fn: callLovableGeminiImage },
-    { name: "openrouter", fn: callOpenRouterImage },
-    { name: "openai", fn: callOpenAIImage },
-    { name: "stability", fn: callStability },
-    { name: "huggingface", fn: callHuggingFaceImage },
+  const providers: Array<[string, (p: string) => Promise<ArrayBuffer>]> = [
+    ["nova-vision-2.0", (p) => novaVision20(p)],
+    ["gateway-gpt-image", gatewayGptImage],
+    ["gateway-gemini-image", gatewayGeminiImage],
+    ["nova-vision-2.1", novaVision21],
+    ["stability", callStability],
   ];
   let lastErr: any = null;
-  for (const p of providers) {
+  for (const [name, fn] of providers) {
     try {
-      const buf = await p.fn(prompt);
-      console.log(`image provider ok: ${p.name}`);
+      const buf = await fn(prompt);
+      console.log(`[image] ${name} ok`);
       return buf;
     } catch (e) {
       lastErr = e;
-      console.error(`image provider ${p.name} failed:`, (e as Error).message);
+      console.error(`[image] ${name} failed:`, (e as Error).message);
     }
   }
   throw lastErr ?? new Error("all image providers failed");
 }
 
-// Image editing via Lovable Gateway (Gemini 2.5 Flash Image / Nano Banana).
-// Accepts one or more input images (data URLs) and an edit instruction.
-async function callLovableImageEdit(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
+async function gatewayImageEdit(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("no lovable key");
   const content: any[] = [{ type: "text", text: prompt }];
@@ -441,36 +480,122 @@ async function callLovableImageEdit(prompt: string, imageDataUrls: string[]): Pr
       modalities: ["image", "text"],
     }),
   });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`lovable image-edit ${r.status} ${t.slice(0, 200)}`);
-  }
+  if (!r.ok) throw new Error(`gateway image-edit ${r.status}`);
   const j = await r.json();
   const msg = j?.choices?.[0]?.message;
   let dataUrl: string | undefined;
-  if (Array.isArray(msg?.images) && msg.images[0]?.image_url?.url) {
-    dataUrl = msg.images[0].image_url.url;
-  } else if (Array.isArray(msg?.content)) {
-    const imgBlock = msg.content.find((c: any) => c?.type === "image_url" || c?.image_url);
-    dataUrl = imgBlock?.image_url?.url;
+  if (Array.isArray(msg?.images) && msg.images[0]?.image_url?.url) dataUrl = msg.images[0].image_url.url;
+  else if (Array.isArray(msg?.content)) {
+    const blk = msg.content.find((c: any) => c?.type === "image_url" || c?.image_url);
+    dataUrl = blk?.image_url?.url;
   }
-  if (!dataUrl) throw new Error("lovable image-edit empty");
-  if (dataUrl.startsWith("data:")) {
-    const b64 = dataUrl.split(",")[1];
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return bytes.buffer;
-  }
+  if (!dataUrl) throw new Error("gateway image-edit empty");
+  if (dataUrl.startsWith("data:")) return b64ToBuffer(dataUrl.split(",")[1]);
   const imgR = await fetch(dataUrl);
   if (!imgR.ok) throw new Error("image-edit fetch " + imgR.status);
-  return await imgR.arrayBuffer();
+  return imgR.arrayBuffer();
 }
 
 async function editImage(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
-  // Only Lovable Gemini reliably supports image editing right now.
-  return callLovableImageEdit(prompt, imageDataUrls);
+  const providers: Array<[string, () => Promise<ArrayBuffer>]> = [
+    ["nova-vision-2.0", () => novaVision20(prompt, imageDataUrls)],
+    ["gateway", () => gatewayImageEdit(prompt, imageDataUrls)],
+    ["nova-vision-2.1", () => novaVision21Edit(prompt, imageDataUrls[0])],
+  ];
+  let lastErr: any = null;
+  for (const [name, fn] of providers) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      console.error(`[image-edit] ${name} failed:`, (e as Error).message);
+    }
+  }
+  throw lastErr ?? new Error("image editing failed");
 }
+
+// ---------------- Nova Music 3.0 / 3.1 ----------------
+function extractAudio(j: any): { buf: ArrayBuffer; mime: string } | null {
+  // Predict-style response
+  const pred = j?.predictions?.[0];
+  const predB64 = pred?.audioContent ?? pred?.bytesBase64Encoded ?? pred?.audio;
+  if (typeof predB64 === "string" && predB64.length > 100) {
+    return { buf: b64ToBuffer(predB64), mime: pred?.mimeType ?? "audio/wav" };
+  }
+  // generateContent-style response
+  const parts = j?.candidates?.[0]?.content?.parts ?? [];
+  for (const p of parts) {
+    const inline = p?.inlineData ?? p?.inline_data;
+    if (inline?.data && String(inline.mimeType ?? inline.mime_type ?? "").startsWith("audio")) {
+      return { buf: b64ToBuffer(inline.data), mime: inline.mimeType ?? inline.mime_type };
+    }
+  }
+  return null;
+}
+
+async function novaMusic(prompt: string, tier: "short" | "song"): Promise<{ buf: ArrayBuffer; mime: string }> {
+  const key = process.env.GeminimusicAPI || process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("nova-music: no key");
+  const model = tier === "song" ? "lyria-3-pro-preview" : "lyria-3-preview";
+  const attempts: Array<{ url: string; body: any }> = [
+    {
+      url: `${GEMINI_BASE}/models/${model}:predict?key=${key}`,
+      body: {
+        instances: [{ prompt }],
+        parameters: { sampleCount: 1, ...(tier === "short" ? { durationSeconds: 30 } : {}) },
+      },
+    },
+    {
+      url: `${GEMINI_BASE}/models/${model}:generateContent?key=${key}`,
+      body: {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ["AUDIO"] },
+      },
+    },
+  ];
+  let lastErr: any = null;
+  for (const a of attempts) {
+    try {
+      const r = await fetch(a.url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(a.body),
+      });
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        throw new Error(`${model} ${r.status} ${t.slice(0, 160)}`);
+      }
+      const j = await r.json();
+      const out = extractAudio(j);
+      if (!out) throw new Error(`${model} returned no audio`);
+      return out;
+    } catch (e) {
+      lastErr = e;
+      console.error("[music] attempt failed:", (e as Error).message);
+    }
+  }
+  throw lastErr ?? new Error("nova-music failed");
+}
+
+// ---------------- Admin / plan helpers ----------------
+const DEV_EMAILS = (process.env.ADMIN_EMAILS ?? "paschalsoromtochukwu@gmail.com")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+async function isAdminUser(supabase: any, userId: string, email: string | null): Promise<boolean> {
+  if (email && DEV_EMAILS.includes(email.toLowerCase())) return true;
+  try {
+    const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
+    return !!data;
+  } catch {
+    return false;
+  }
+}
+
+const FREE_IMAGE_DELAY_MS = 10_000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 
 // ---------- SERVER FUNCTIONS ----------
 
