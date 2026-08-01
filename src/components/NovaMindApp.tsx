@@ -244,14 +244,15 @@ export function NovaMindApp() {
         tid = t.id;
       }
       const hasImages = payload.images.length > 0;
-      const looksImage = payload.isEdit || (!hasImages && /\b(image|picture|photo|draw|paint|render|illustration|logo|wallpaper|poster|sketch|portrait|imagine|visualize)\b/i.test(payload.content));
+      const isMusic = !hasImages && !!detectMusicRequest(payload.content);
+      const looksImage = payload.isEdit || (!hasImages && !isMusic && /\b(image|picture|photo|draw|paint|render|illustration|logo|wallpaper|poster|sketch|portrait|imagine|visualize)\b/i.test(payload.content));
       const userMsg: UIMessage = {
         id: "u-" + crypto.randomUUID(), role: "user", content: payload.content,
         image_url: hasImages ? payload.images[0] : null,
       };
       const pending: UIMessage = {
         id: "p-" + crypto.randomUUID(), role: "assistant", content: "",
-        pending: looksImage ? "image" : "text",
+        pending: isMusic ? "music" : looksImage ? "image" : "text",
       };
       setOptimistic([userMsg, pending]);
       const res = await sendFn({ data: { threadId: tid, content: payload.content, images: hasImages ? payload.images : undefined } });
