@@ -18,6 +18,44 @@ export function detectImageRequest(text: string): string | null {
   return null;
 }
 
+// ---------------- Music intent ----------------
+// Nova Music 3.0 → short instrumental / melody / beat
+// Nova Music 3.1 → full song generated from (or with) lyrics
+export type MusicIntent = { prompt: string; tier: "short" | "song" };
+
+const MUSIC_NOUNS =
+  /\b(song|songs|music|melody|melodies|beat|beats|instrumental|instrumentals|track|tracks|tune|tunes|jingle|soundtrack|score|riff|loop|anthem|hymn|ringtone)\b/i;
+
+const MUSIC_VERBS =
+  /\b(generate|create|make|compose|produce|write|record|give\s+me|play\s+me|craft|build)\b/i;
+
+const SONG_HINTS =
+  /\b(lyrics|lyric|verse|verses|chorus|hook|bridge|vocals?|sing|singing|singer|worship|gospel|rap|afrobeat|afrobeats|amapiano|full\s+song|complete\s+song|ballad|anthem|hymn|with\s+words)\b/i;
+
+const SHORT_HINTS =
+  /\b(instrumental|beat|melody|loop|riff|jingle|background\s+music|no\s+vocals|piano|guitar|violin|drum|drums|synth|lo-?fi|ambient|\d+\s*[-\s]?second|\d+\s*sec\b|\d+\s*s\b)\b/i;
+
+export function detectMusicRequest(text: string): MusicIntent | null {
+  const t = text.trim();
+  if (!t) return null;
+  const hasNoun = MUSIC_NOUNS.test(t);
+  const hasVerb = MUSIC_VERBS.test(t);
+  // "write and generate a worship song", "create a 30-second beat", "make me a piano melody"
+  if (!hasNoun || !hasVerb) {
+    // also allow imperative-only forms: "compose a lo-fi loop"
+    if (!(hasNoun && /^\s*(compose|produce|generate|create|make|write)\b/i.test(t))) return null;
+  }
+  // Exclude "write song lyrics" (text-only request) — user wants text, not audio.
+  if (/\b(lyrics|words)\s+(only|just)\b/i.test(t)) return null;
+  if (/^\s*write\s+(me\s+)?(the\s+)?lyrics\b/i.test(t)) return null;
+
+  const songy = SONG_HINTS.test(t);
+  const shorty = SHORT_HINTS.test(t);
+  const tier: MusicIntent["tier"] = songy && !(shorty && !songy) ? "song" : shorty ? "short" : "short";
+  return { prompt: t, tier: songy ? "song" : tier };
+}
+
+
 // Detect whether a prompt (with an attached image) is asking to EDIT the image
 // vs. asking to analyze/describe/answer questions about it.
 const EDIT_PATTERNS = [
