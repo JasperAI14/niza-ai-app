@@ -652,7 +652,7 @@ export const getThreadMessages = createServerFn({ method: "GET" })
     const { supabase, userId } = context as any;
     const { data: msgs, error } = await supabase
       .from("messages")
-      .select("id, thread_id, role, content, image_url, created_at")
+      .select("id, thread_id, role, content, image_url, audio_url, watermarked, edited, created_at")
       .eq("user_id", userId)
       .eq("thread_id", data.threadId)
       .order("created_at", { ascending: true });
@@ -660,7 +660,7 @@ export const getThreadMessages = createServerFn({ method: "GET" })
       console.error("[getThreadMessages] DB error:", error);
       throw new Error("Failed to load messages. Please try again.");
     }
-    // sign image URLs
+    // sign storage URLs
     const out: DBMessage[] = [];
     for (const m of msgs ?? []) {
       let img: string | null = m.image_url;
@@ -670,10 +670,122 @@ export const getThreadMessages = createServerFn({ method: "GET" })
           .createSignedUrl(img, 60 * 60 * 6);
         img = signed?.signedUrl ?? null;
       }
-      out.push({ ...m, image_url: img });
+      let aud: string | null = m.audio_url ?? null;
+      if (aud && !aud.startsWith("http")) {
+        const { data: signedA } = await supabase.storage
+          .from("generated-audio")
+          .createSignedUrl(aud, 60 * 60 * 6);
+        aud = signedA?.signedUrl ?? null;
+      }
+      out.push({ ...m, image_url: img, audio_url: aud });
     }
     return out;
   });
+
+export const searchMessages = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { q: string }) => z.object({ q: z.string().min(1).max(200) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const term = data.q.replace(/[%_,]/g, " ").trim();
+    if (!term) return [];
+    const { data: rows, error } = await supabase
+      .from("messages")
+      .select("id, thread_id, role, content, created_at")
+      .eq("user_id", userId)
+      .ilike("content", `%${term}%`)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    if (error) {
+      console.error("[searchMessages] DB error:", error);
+      throw new Error("Search failed. Please try again.");
+    }
+    return (rows ?? []) as Array<{
+      id: string;
+      thread_id: string;
+      role: string;
+      content: string;
+      created_at: string;
+    }>;
+  });
+
+export const editMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string; content: string }) =>
+    z.object({ messageId: z.string().uuid(), content: z.string().min(1).max(12000) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { error } = await supabase
+      .from("messages")
+      .update({ content: data.content, edited: true, edited_at: new Date().toISOString() })
+      .eq("id", data.messageId)
+      .eq("user_id", userId)
+      .eq("role", "user");
+    if (error) {
+      console.error("[editMessage] DB error:", error);
+      throw new Error("Could not update the message. Please try again.");
+    }
+    return { ok: true };
+  });
+
+export const saveMusic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string; title?: string }) =>
+    z.object({ messageId: z.string().uuid(), title: z.string().max(120).optional() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: msg } = await supabase
+      .from("messages")
+      .select("id, audio_url, thread_id, created_at")
+      .eq("id", data.messageId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!msg?.audio_url) return { ok: false, message: "No track found on that message." };
+    const { data: prompt } = await supabase
+      .from("messages")
+      .select("content")
+      .eq("user_id", userId)
+      .eq("thread_id", msg.thread_id)
+      .eq("role", "user")
+      .lt("created_at", msg.created_at)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { error } = await supabase.from("music_history").insert({
+      user_id: userId,
+      title: data.title ?? (prompt?.content ? deriveTitle(prompt.content) : "Untitled track"),
+      prompt: prompt?.content ?? "",
+      audio_path: msg.audio_url,
+    });
+    if (error) {
+      console.error("[saveMusic] DB error:", error);
+      return { ok: false, message: "Could not save this track." };
+    }
+    return { ok: true, message: "Saved to your music history." };
+  });
+
+export const listMusic = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    const { data: rows } = await supabase
+      .from("music_history")
+      .select("id, title, prompt, audio_path, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    const out: Array<{ id: string; title: string; prompt: string; url: string | null; created_at: string }> = [];
+    for (const r of rows ?? []) {
+      const { data: signed } = await supabase.storage
+        .from("generated-audio")
+        .createSignedUrl(r.audio_path, 60 * 60 * 6);
+      out.push({ id: r.id, title: r.title, prompt: r.prompt, url: signed?.signedUrl ?? null, created_at: r.created_at });
+    }
+    return out;
+  });
+
 
 export const createThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
