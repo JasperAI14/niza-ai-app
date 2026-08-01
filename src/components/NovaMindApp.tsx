@@ -17,6 +17,7 @@ import {
   type DBMessage,
 } from "@/lib/chat.functions";
 import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-utils";
+import { detectMusicRequest } from "@/lib/intent";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 import { UpgradeInlineBanner } from "./UpgradeModal";
 
