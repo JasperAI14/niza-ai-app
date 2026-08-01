@@ -200,6 +200,8 @@ export function NovaMindApp() {
   const messages = useMemo<UIMessage[]>(() => {
     const base: UIMessage[] = (messagesQ.data ?? []).map((m: DBMessage) => ({
       id: m.id, role: m.role, content: m.content, image_url: m.image_url,
+      audio_url: m.audio_url ?? null, watermarked: m.watermarked, edited: m.edited,
+      created_at: m.created_at,
     }));
     return [...base, ...optimistic];
   }, [messagesQ.data, optimistic]);
