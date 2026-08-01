@@ -702,6 +702,27 @@ function deriveTitle(text: string) {
   return t.length > 48 ? t.slice(0, 48) + "…" : t || "New chat";
 }
 
+// Short, human-readable chat title derived from the first exchange.
+async function smartTitle(userText: string, assistantText: string): Promise<string> {
+  try {
+    const raw = await generateText([
+      {
+        role: "user",
+        content: `Write a short chat title (3 to 6 words, Title Case, no quotes, no punctuation at the end) that summarises this conversation.\n\nUser: ${userText.slice(0, 800)}\n\nAssistant: ${assistantText.slice(0, 400)}\n\nReply with the title only.`,
+      },
+    ]);
+    const cleaned = raw
+      .replace(/["'`*#]/g, "")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean)[0];
+    if (cleaned && cleaned.length >= 3 && cleaned.length <= 60) return cleaned.replace(/[.:;,]+$/, "");
+  } catch (e) {
+    console.error("[title] failed:", (e as Error).message);
+  }
+  return deriveTitle(userText);
+}
+
 export const sendMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { threadId: string; content: string; images?: string[] }) =>
@@ -730,18 +751,24 @@ export const sendMessage = createServerFn({ method: "POST" })
 
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
+    const isAdmin = await isAdminUser(supabase, userId, profile.email);
+    const watermark = profile.plan !== "premium" && !isAdmin;
 
     const hasImages = !!data.images && data.images.length > 0;
-    // If the user attached image(s) with an edit-style instruction, we route to image editing.
     const wantsEdit = hasImages && detectImageEdit(data.content);
-    // Text-only image-generation intent
-    const imagePrompt = hasImages ? null : detectImageRequest(data.content);
+    const music = hasImages ? null : detectMusicRequest(data.content);
+    const imagePrompt = hasImages || music ? null : detectImageRequest(data.content);
     const isImage = !!imagePrompt || wantsEdit;
+    const isMedia = isImage || !!music;
 
-    if (isImage && usage.image_count >= usage.image_limit) {
-      return { ok: false, kind: "limit" as const, message: "Image limit reached. Resets every 5 hours." };
+    if (isMedia && !isAdmin && usage.image_count >= usage.image_limit) {
+      return {
+        ok: false,
+        kind: "limit" as const,
+        message: music ? "Music limit reached. Resets every 5 hours." : "Image limit reached. Resets every 5 hours.",
+      };
     }
-    if (!isImage && usage.text_count >= usage.text_limit) {
+    if (!isMedia && !isAdmin && usage.text_count >= usage.text_limit) {
       return { ok: false, kind: "limit" as const, message: "Text limit reached. Will reset automatically." };
     }
 
@@ -752,78 +779,88 @@ export const sendMessage = createServerFn({ method: "POST" })
       role: "user",
       content: data.content,
     });
-
-    // Update title if it was the default
-    if (thread.title === "New chat") {
-      await supabase
-        .from("threads")
-        .update({ title: deriveTitle(data.content), updated_at: new Date().toISOString() })
-        .eq("id", data.threadId);
-    } else {
-      await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", data.threadId);
-    }
+    await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", data.threadId);
 
     let assistantContent = "";
     let imagePath: string | null = null;
     let signedImage: string | null = null;
+    let audioPath: string | null = null;
+    let signedAudio: string | null = null;
+    let watermarked = false;
 
-    if (wantsEdit) {
+    async function storeImage(buf: ArrayBuffer) {
+      const path = `${userId}/${crypto.randomUUID()}.png`;
+      const { error: upErr } = await supabase.storage
+        .from("generated-images")
+        .upload(path, new Uint8Array(buf), { contentType: "image/png" });
+      if (upErr) throw upErr;
+      const { data: signed } = await supabase.storage
+        .from("generated-images")
+        .createSignedUrl(path, 60 * 60 * 6);
+      imagePath = path;
+      signedImage = signed?.signedUrl ?? null;
+      watermarked = watermark;
+    }
+
+    async function bumpImage() {
+      const adm = await adminClient();
+      await adm.from("usage").update({ image_count: usage.image_count + 1 }).eq("user_id", userId);
+    }
+    async function bumpText() {
+      const adm = await adminClient();
+      await adm.from("usage").update({ text_count: usage.text_count + 1 }).eq("user_id", userId);
+    }
+
+    if (music) {
       try {
-        const buf = await editImage(data.content, data.images!);
-        const path = `${userId}/${crypto.randomUUID()}.png`;
+        if (!isAdmin) await sleep(FREE_IMAGE_DELAY_MS);
+        const { buf, mime } = await novaMusic(music.prompt, music.tier);
+        const ext = mime.includes("mpeg") ? "mp3" : mime.includes("ogg") ? "ogg" : "wav";
+        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage
-          .from("generated-images")
-          .upload(path, new Uint8Array(buf), { contentType: "image/png" });
+          .from("generated-audio")
+          .upload(path, new Uint8Array(buf), { contentType: mime || "audio/wav" });
         if (upErr) throw upErr;
-        imagePath = path;
+        audioPath = path;
         const { data: signed } = await supabase.storage
-          .from("generated-images")
+          .from("generated-audio")
           .createSignedUrl(path, 60 * 60 * 6);
-        signedImage = signed?.signedUrl ?? null;
-        assistantContent = `Here's your edited image:`;
-        const _admE = await adminClient();
-        await _admE.from("usage").update({ image_count: usage.image_count + 1 }).eq("user_id", userId);
+        signedAudio = signed?.signedUrl ?? null;
+        assistantContent = music.tier === "song" ? "Here's your song:" : "Here's your track:";
+        if (!isAdmin) await bumpImage();
+      } catch (e) {
+        console.error("music gen failed:", e);
+        assistantContent = "Sorry, music generation is unavailable right now. Please try again later.";
+      }
+    } else if (wantsEdit) {
+      try {
+        if (!isAdmin) await sleep(FREE_IMAGE_DELAY_MS);
+        await storeImage(await editImage(data.content, data.images!));
+        assistantContent = "Here's your edited image:";
+        if (!isAdmin) await bumpImage();
       } catch (e) {
         console.error("image edit failed:", e);
         assistantContent = "Sorry, image editing is unavailable right now. Please try again later.";
       }
     } else if (imagePrompt) {
       try {
-        const buf = await generateImage(imagePrompt);
-        const path = `${userId}/${crypto.randomUUID()}.png`;
-        const { error: upErr } = await supabase.storage
-          .from("generated-images")
-          .upload(path, new Uint8Array(buf), { contentType: "image/png" });
-        if (upErr) throw upErr;
-        imagePath = path;
-        const { data: signed } = await supabase.storage
-          .from("generated-images")
-          .createSignedUrl(path, 60 * 60 * 6);
-        signedImage = signed?.signedUrl ?? null;
-        assistantContent = `Here's your image:`;
-        const _admin1 = await adminClient();
-        await _admin1
-          .from("usage")
-          .update({ image_count: usage.image_count + 1 })
-          .eq("user_id", userId);
+        if (!isAdmin) await sleep(FREE_IMAGE_DELAY_MS);
+        await storeImage(await generateImage(imagePrompt));
+        assistantContent = "Here's your image:";
+        if (!isAdmin) await bumpImage();
       } catch (e) {
         console.error("image gen failed:", e);
         assistantContent = "Sorry, image generation is unavailable right now. Please try again later.";
       }
     } else if (hasImages) {
       try {
-        assistantContent = await callLovableVision(data.content, data.images!);
-        const _admin2 = await adminClient();
-        await _admin2
-          .from("usage")
-          .update({ text_count: usage.text_count + 1 })
-          .eq("user_id", userId);
+        assistantContent = await novaVisionAnalyze(data.content, data.images!);
+        if (!isAdmin) await bumpText();
       } catch (e) {
         console.error("vision failed:", e);
         assistantContent = "Sorry, I couldn't analyze the image right now. Please try again.";
       }
     } else {
-      // Build history (re-load last N messages for context)
       const { data: history } = await supabase
         .from("messages")
         .select("role, content")
@@ -835,11 +872,7 @@ export const sendMessage = createServerFn({ method: "POST" })
         assistantContent = await generateText(
           (history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
         );
-        const _admin3 = await adminClient();
-        await _admin3
-          .from("usage")
-          .update({ text_count: usage.text_count + 1 })
-          .eq("user_id", userId);
+        if (!isAdmin) await bumpText();
       } catch (e) {
         console.error("text gen failed:", e);
         assistantContent = "AI is currently unavailable. Please try again.";
@@ -854,16 +887,31 @@ export const sendMessage = createServerFn({ method: "POST" })
         role: "assistant",
         content: assistantContent,
         image_url: imagePath,
+        audio_url: audioPath,
+        watermarked,
       })
-      .select("id, thread_id, role, content, image_url, created_at")
+      .select("id, thread_id, role, content, image_url, audio_url, watermarked, edited, created_at")
       .single();
+
+    // Smart title once the first exchange completes.
+    let newTitle: string | null = null;
+    if (thread.title === "New chat") {
+      newTitle = await smartTitle(data.content, assistantContent);
+      await supabase.from("threads").update({ title: newTitle }).eq("id", data.threadId);
+    }
 
     return {
       ok: true,
       kind: "message" as const,
-      assistant: { ...(inserted as any), image_url: signedImage ?? (inserted as any).image_url },
+      title: newTitle,
+      assistant: {
+        ...(inserted as any),
+        image_url: signedImage ?? (inserted as any)?.image_url ?? null,
+        audio_url: signedAudio ?? (inserted as any)?.audio_url ?? null,
+      },
     };
   });
+
 
 export const regenerateImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
