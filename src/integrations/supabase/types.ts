@@ -38,6 +38,42 @@ export type Database = {
         }
         Relationships: []
       }
+      error_reports: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          details: Json
+          device: string | null
+          error_type: string
+          feature: string | null
+          id: string
+          message: string
+          user_id: string | null
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          details?: Json
+          device?: string | null
+          error_type?: string
+          feature?: string | null
+          id?: string
+          message?: string
+          user_id?: string | null
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          details?: Json
+          device?: string | null
+          error_type?: string
+          feature?: string | null
+          id?: string
+          message?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           audio_url: string | null
@@ -115,6 +151,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          audience: string
+          body: string
+          created_at: string
+          id: string
+          kind: string
+          read: boolean
+          title: string
+          user_id: string
+        }
+        Insert: {
+          audience?: string
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          read?: boolean
+          title: string
+          user_id: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          read?: boolean
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       nova_hub_config: {
         Row: {
           app_id: string | null
@@ -183,7 +252,9 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string
+          display_name: string | null
           email: string | null
           id: string
           paystack_customer_code: string | null
@@ -192,9 +263,12 @@ export type Database = {
           plan_expires_at: string | null
           plan_status: string
           promo_used: boolean
+          username: string | null
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
           id: string
           paystack_customer_code?: string | null
@@ -203,9 +277,12 @@ export type Database = {
           plan_expires_at?: string | null
           plan_status?: string
           promo_used?: boolean
+          username?: string | null
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
           id?: string
           paystack_customer_code?: string | null
@@ -214,6 +291,100 @@ export type Database = {
           plan_expires_at?: string | null
           plan_status?: string
           promo_used?: boolean
+          username?: string | null
+        }
+        Relationships: []
+      }
+      reviews: {
+        Row: {
+          admin_reply: string | null
+          ai_reply: string | null
+          archived: boolean
+          body: string
+          created_at: string
+          escalated: boolean
+          id: string
+          rating: number
+          screenshot_url: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_reply?: string | null
+          ai_reply?: string | null
+          archived?: boolean
+          body?: string
+          created_at?: string
+          escalated?: boolean
+          id?: string
+          rating: number
+          screenshot_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_reply?: string | null
+          ai_reply?: string | null
+          archived?: boolean
+          body?: string
+          created_at?: string
+          escalated?: boolean
+          id?: string
+          rating?: number
+          screenshot_url?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      support_requests: {
+        Row: {
+          admin_reply: string | null
+          archived: boolean
+          created_at: string
+          diagnostics: Json
+          id: string
+          message: string
+          screenshot_url: string | null
+          source: string
+          status: string
+          subject: string
+          thread_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          admin_reply?: string | null
+          archived?: boolean
+          created_at?: string
+          diagnostics?: Json
+          id?: string
+          message: string
+          screenshot_url?: string | null
+          source?: string
+          status?: string
+          subject: string
+          thread_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          admin_reply?: string | null
+          archived?: boolean
+          created_at?: string
+          diagnostics?: Json
+          id?: string
+          message?: string
+          screenshot_url?: string | null
+          source?: string
+          status?: string
+          subject?: string
+          thread_id?: string | null
+          updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }

@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, MessageSquare, Menu, LogOut, Sparkles, Film, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
+import { Plus, Send, Trash2, MessageSquare, Menu, Sparkles, Film, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
+import { ProfileRow } from "./ProfileRow";
+
 import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
@@ -587,9 +589,8 @@ export function NovaMindApp() {
           </div>
         )}
 
-        <button onClick={signOut} className="m-3 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
-          <LogOut className="h-4 w-4" /> Sign out
-        </button>
+        <ProfileRow />
+
       </aside>
 
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
