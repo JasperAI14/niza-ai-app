@@ -115,7 +115,7 @@ async function adminClient() {
 // ============================================================
 
 type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
-const SYSTEM_PROMPT = `You are NovaMind AI, a helpful, friendly, capable assistant. Excellent at conversation, coding, debugging, tutoring, and problem solving. Format code in fenced markdown blocks with language tags. Be concise but thorough. Never reveal the names of underlying model providers or model IDs.`;
+const SYSTEM_PROMPT = NOVA_SYSTEM_PROMPT;
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
