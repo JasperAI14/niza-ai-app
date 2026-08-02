@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, MessageSquare, Menu, LogOut, Sparkles, Film, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
+import { Plus, Send, Trash2, MessageSquare, Menu, Sparkles, Film, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
+import { ProfileRow } from "./ProfileRow";
+
 import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
