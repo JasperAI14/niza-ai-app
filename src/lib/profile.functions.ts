@@ -142,7 +142,7 @@ export const updateProfile = createServerFn({ method: "POST" })
     if (!Object.keys(patch).length) return { ok: true, message: "Nothing to update." };
 
     const db = await admin();
-    const { error } = await db.from("profiles").update(patch).eq("id", userId);
+    const { error } = await db.from("profiles").update(patch as any).eq("id", userId);
     if (error) {
       if ((error as any).code === "23505") {
         return { ok: false, message: "That username is already taken. Please try another one." };
@@ -426,7 +426,7 @@ export const adminUpdateReview = createServerFn({ method: "POST" })
     if (data.admin_reply !== undefined) patch.admin_reply = data.admin_reply;
     if (data.status !== undefined) patch.status = data.status;
     if (data.archived !== undefined) patch.archived = data.archived;
-    const { data: row } = await db.from("reviews").update(patch).eq("id", data.id).select("user_id").maybeSingle();
+    const { data: row } = await db.from("reviews").update(patch as any).eq("id", data.id).select("user_id").maybeSingle();
     if (data.admin_reply && row?.user_id) {
       await db.from("notifications").insert({
         user_id: row.user_id,
@@ -477,7 +477,7 @@ export const adminUpdateSupport = createServerFn({ method: "POST" })
     if (data.archived !== undefined) patch.archived = data.archived;
     const { data: row } = await db
       .from("support_requests")
-      .update(patch)
+      .update(patch as any)
       .eq("id", data.id)
       .select("user_id")
       .maybeSingle();
