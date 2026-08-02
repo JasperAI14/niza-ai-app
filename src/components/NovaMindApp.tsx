@@ -587,9 +587,8 @@ export function NovaMindApp() {
           </div>
         )}
 
-        <button onClick={signOut} className="m-3 flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent">
-          <LogOut className="h-4 w-4" /> Sign out
-        </button>
+        <ProfileRow />
+
       </aside>
 
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
