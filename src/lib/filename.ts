@@ -5,7 +5,7 @@ const STOP = new Set([
   "please","can","could","would","make","create","generate","give","write","draw","design",
   "picture","image","photo","that","this","some","it","is","are","be","using","use","about",
   "into","at","by","from","as","new","need","want","show","help","let","us","we","do","does",
-];
+]);
 
 const EXT_BY_LANG: Record<string, string> = {
   js: "js", javascript: "js", jsx: "jsx", ts: "ts", typescript: "ts", tsx: "tsx",
