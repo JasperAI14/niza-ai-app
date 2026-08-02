@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile.index'
 import { Route as AuthenticatedUpgradeCallbackRouteImport } from './routes/_authenticated/upgrade.callback'
+import { Route as AuthenticatedProfilePersonalRouteImport } from './routes/_authenticated/profile.personal'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin.payments'
 import { Route as AuthenticatedAdminNovaHubRouteImport } from './routes/_authenticated/admin.nova-hub'
 import { Route as ApiPublicPaystackWebhookRouteImport } from './routes/api/public/paystack/webhook'
@@ -51,6 +52,12 @@ const AuthenticatedUpgradeCallbackRoute =
     path: '/upgrade/callback',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedProfilePersonalRoute =
+  AuthenticatedProfilePersonalRouteImport.update({
+    id: '/profile/personal',
+    path: '/profile/personal',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminPaymentsRoute =
   AuthenticatedAdminPaymentsRouteImport.update({
     id: '/admin/payments',
@@ -81,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/profile/personal': typeof AuthenticatedProfilePersonalRoute
   '/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
@@ -92,6 +100,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/profile/personal': typeof AuthenticatedProfilePersonalRoute
   '/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
@@ -105,6 +114,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/_authenticated/profile/personal': typeof AuthenticatedProfilePersonalRoute
   '/_authenticated/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/admin/nova-hub'
     | '/admin/payments'
+    | '/profile/personal'
     | '/upgrade/callback'
     | '/profile/'
     | '/api/public/novahub/webhook'
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin/nova-hub'
     | '/admin/payments'
+    | '/profile/personal'
     | '/upgrade/callback'
     | '/profile'
     | '/api/public/novahub/webhook'
@@ -141,6 +153,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/admin/nova-hub'
     | '/_authenticated/admin/payments'
+    | '/_authenticated/profile/personal'
     | '/_authenticated/upgrade/callback'
     | '/_authenticated/profile/'
     | '/api/public/novahub/webhook'
@@ -199,6 +212,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUpgradeCallbackRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/profile/personal': {
+      id: '/_authenticated/profile/personal'
+      path: '/profile/personal'
+      fullPath: '/profile/personal'
+      preLoaderRoute: typeof AuthenticatedProfilePersonalRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/payments': {
       id: '/_authenticated/admin/payments'
       path: '/admin/payments'
@@ -234,6 +254,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
   AuthenticatedAdminNovaHubRoute: typeof AuthenticatedAdminNovaHubRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
+  AuthenticatedProfilePersonalRoute: typeof AuthenticatedProfilePersonalRoute
   AuthenticatedUpgradeCallbackRoute: typeof AuthenticatedUpgradeCallbackRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
 }
@@ -242,6 +263,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
   AuthenticatedAdminNovaHubRoute: AuthenticatedAdminNovaHubRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
+  AuthenticatedProfilePersonalRoute: AuthenticatedProfilePersonalRoute,
   AuthenticatedUpgradeCallbackRoute: AuthenticatedUpgradeCallbackRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
 }
