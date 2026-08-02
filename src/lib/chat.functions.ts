@@ -1,3 +1,4 @@
+import { NOVA_SYSTEM_PROMPT } from "@/lib/nova-knowledge";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
