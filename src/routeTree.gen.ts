@@ -20,8 +20,11 @@ import { Route as AuthenticatedProfilePrivacyRouteImport } from './routes/_authe
 import { Route as AuthenticatedProfilePersonalRouteImport } from './routes/_authenticated/profile.personal'
 import { Route as AuthenticatedProfileFeedbackRouteImport } from './routes/_authenticated/profile.feedback'
 import { Route as AuthenticatedProfileAboutRouteImport } from './routes/_authenticated/profile.about'
+import { Route as AuthenticatedAdminSupportRouteImport } from './routes/_authenticated/admin.support'
+import { Route as AuthenticatedAdminReviewsRouteImport } from './routes/_authenticated/admin.reviews'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin.payments'
 import { Route as AuthenticatedAdminNovaHubRouteImport } from './routes/_authenticated/admin.nova-hub'
+import { Route as AuthenticatedAdminErrorsRouteImport } from './routes/_authenticated/admin.errors'
 import { Route as ApiPublicPaystackWebhookRouteImport } from './routes/api/public/paystack/webhook'
 import { Route as ApiPublicNovahubWebhookRouteImport } from './routes/api/public/novahub/webhook'
 
@@ -86,6 +89,18 @@ const AuthenticatedProfileAboutRoute =
     path: '/profile/about',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminSupportRoute =
+  AuthenticatedAdminSupportRouteImport.update({
+    id: '/admin/support',
+    path: '/admin/support',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminReviewsRoute =
+  AuthenticatedAdminReviewsRouteImport.update({
+    id: '/admin/reviews',
+    path: '/admin/reviews',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminPaymentsRoute =
   AuthenticatedAdminPaymentsRouteImport.update({
     id: '/admin/payments',
@@ -96,6 +111,12 @@ const AuthenticatedAdminNovaHubRoute =
   AuthenticatedAdminNovaHubRouteImport.update({
     id: '/admin/nova-hub',
     path: '/admin/nova-hub',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminErrorsRoute =
+  AuthenticatedAdminErrorsRouteImport.update({
+    id: '/admin/errors',
+    path: '/admin/errors',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const ApiPublicPaystackWebhookRoute =
@@ -114,8 +135,11 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
+  '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/profile/about': typeof AuthenticatedProfileAboutRoute
   '/profile/feedback': typeof AuthenticatedProfileFeedbackRoute
   '/profile/personal': typeof AuthenticatedProfilePersonalRoute
@@ -130,8 +154,11 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/': typeof AuthenticatedIndexRoute
+  '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
+  '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/profile/about': typeof AuthenticatedProfileAboutRoute
   '/profile/feedback': typeof AuthenticatedProfileFeedbackRoute
   '/profile/personal': typeof AuthenticatedProfilePersonalRoute
@@ -148,8 +175,11 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/_authenticated/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
+  '/_authenticated/admin/reviews': typeof AuthenticatedAdminReviewsRoute
+  '/_authenticated/admin/support': typeof AuthenticatedAdminSupportRoute
   '/_authenticated/profile/about': typeof AuthenticatedProfileAboutRoute
   '/_authenticated/profile/feedback': typeof AuthenticatedProfileFeedbackRoute
   '/_authenticated/profile/personal': typeof AuthenticatedProfilePersonalRoute
@@ -166,8 +196,11 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/reset-password'
+    | '/admin/errors'
     | '/admin/nova-hub'
     | '/admin/payments'
+    | '/admin/reviews'
+    | '/admin/support'
     | '/profile/about'
     | '/profile/feedback'
     | '/profile/personal'
@@ -182,8 +215,11 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/'
+    | '/admin/errors'
     | '/admin/nova-hub'
     | '/admin/payments'
+    | '/admin/reviews'
+    | '/admin/support'
     | '/profile/about'
     | '/profile/feedback'
     | '/profile/personal'
@@ -199,8 +235,11 @@ export interface FileRouteTypes {
     | '/auth'
     | '/reset-password'
     | '/_authenticated/'
+    | '/_authenticated/admin/errors'
     | '/_authenticated/admin/nova-hub'
     | '/_authenticated/admin/payments'
+    | '/_authenticated/admin/reviews'
+    | '/_authenticated/admin/support'
     | '/_authenticated/profile/about'
     | '/_authenticated/profile/feedback'
     | '/_authenticated/profile/personal'
@@ -299,6 +338,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileAboutRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/support': {
+      id: '/_authenticated/admin/support'
+      path: '/admin/support'
+      fullPath: '/admin/support'
+      preLoaderRoute: typeof AuthenticatedAdminSupportRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/reviews': {
+      id: '/_authenticated/admin/reviews'
+      path: '/admin/reviews'
+      fullPath: '/admin/reviews'
+      preLoaderRoute: typeof AuthenticatedAdminReviewsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/payments': {
       id: '/_authenticated/admin/payments'
       path: '/admin/payments'
@@ -311,6 +364,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/nova-hub'
       fullPath: '/admin/nova-hub'
       preLoaderRoute: typeof AuthenticatedAdminNovaHubRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/errors': {
+      id: '/_authenticated/admin/errors'
+      path: '/admin/errors'
+      fullPath: '/admin/errors'
+      preLoaderRoute: typeof AuthenticatedAdminErrorsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/public/paystack/webhook': {
@@ -332,8 +392,11 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedAdminErrorsRoute: typeof AuthenticatedAdminErrorsRoute
   AuthenticatedAdminNovaHubRoute: typeof AuthenticatedAdminNovaHubRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
+  AuthenticatedAdminReviewsRoute: typeof AuthenticatedAdminReviewsRoute
+  AuthenticatedAdminSupportRoute: typeof AuthenticatedAdminSupportRoute
   AuthenticatedProfileAboutRoute: typeof AuthenticatedProfileAboutRoute
   AuthenticatedProfileFeedbackRoute: typeof AuthenticatedProfileFeedbackRoute
   AuthenticatedProfilePersonalRoute: typeof AuthenticatedProfilePersonalRoute
@@ -345,8 +408,11 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedAdminErrorsRoute: AuthenticatedAdminErrorsRoute,
   AuthenticatedAdminNovaHubRoute: AuthenticatedAdminNovaHubRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
+  AuthenticatedAdminReviewsRoute: AuthenticatedAdminReviewsRoute,
+  AuthenticatedAdminSupportRoute: AuthenticatedAdminSupportRoute,
   AuthenticatedProfileAboutRoute: AuthenticatedProfileAboutRoute,
   AuthenticatedProfileFeedbackRoute: AuthenticatedProfileFeedbackRoute,
   AuthenticatedProfilePersonalRoute: AuthenticatedProfilePersonalRoute,
