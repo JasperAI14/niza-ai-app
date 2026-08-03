@@ -38,7 +38,7 @@ export type Segment =
   | { type: "artifact"; artifact: Artifact };
 
 const MARKER =
-  /^::artifact([^\n]*)\n([\s\S]*?)(?:^::end\s*$|\z)/gm;
+  /^::artifact([^\n]*)\n([\s\S]*?)(?:^::end[ \t]*$|$(?![\s\S]))/gm;
 
 const KINDS: ArtifactKind[] = [
   "code", "email", "letter", "post", "document", "prompt",
