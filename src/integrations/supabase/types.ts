@@ -74,6 +74,33 @@ export type Database = {
         }
         Relationships: []
       }
+      message_feedback: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          note: string | null
+          rating: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          note?: string | null
+          rating: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          note?: string | null
+          rating?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           audio_url: string | null
@@ -83,6 +110,8 @@ export type Database = {
           edited_at: string | null
           id: string
           image_url: string | null
+          media_model: string | null
+          media_prompt: string | null
           role: string
           thread_id: string
           user_id: string
@@ -96,6 +125,8 @@ export type Database = {
           edited_at?: string | null
           id?: string
           image_url?: string | null
+          media_model?: string | null
+          media_prompt?: string | null
           role: string
           thread_id: string
           user_id: string
@@ -109,6 +140,8 @@ export type Database = {
           edited_at?: string | null
           id?: string
           image_url?: string | null
+          media_model?: string | null
+          media_prompt?: string | null
           role?: string
           thread_id?: string
           user_id?: string
@@ -128,6 +161,7 @@ export type Database = {
         Row: {
           audio_path: string
           created_at: string
+          duration_seconds: number | null
           id: string
           prompt: string
           title: string
@@ -136,6 +170,7 @@ export type Database = {
         Insert: {
           audio_path: string
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           prompt?: string
           title?: string
@@ -144,6 +179,7 @@ export type Database = {
         Update: {
           audio_path?: string
           created_at?: string
+          duration_seconds?: number | null
           id?: string
           prompt?: string
           title?: string
@@ -250,6 +286,30 @@ export type Database = {
         }
         Relationships: []
       }
+      pinned_messages: {
+        Row: {
+          created_at: string
+          id: string
+          message_id: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_id: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_id?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -257,6 +317,7 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          language: string
           paystack_customer_code: string | null
           paystack_subscription_code: string | null
           plan: string
@@ -271,6 +332,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id: string
+          language?: string
           paystack_customer_code?: string | null
           paystack_subscription_code?: string | null
           plan?: string
@@ -285,6 +347,7 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          language?: string
           paystack_customer_code?: string | null
           paystack_subscription_code?: string | null
           plan?: string
