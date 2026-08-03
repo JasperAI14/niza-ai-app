@@ -7,7 +7,7 @@ Goal: finish the unfinished areas from August 1–2 without redesigning what alr
 Today Smart Copy triggers on length and list counts, so ordinary answers get boxed. New rule:
 
 - The model tags reusable output itself. The system prompt instructs the assistant to wrap only copy-out artifacts (emails, letters, blog/social posts, documents, prompts, templates, configs, JSON, SQL, full code files, resumes, proposals) in a marker with a short title, e.g. `::artifact title="Marketing Email" kind="email"`.
-- Client-side detection becomes a strict fallback: only a fenced code block or a marker activates Smart Copy. Length, list count, and heading count no longer trigger it.
+- Client-side detection becomes a conservative fallback. Prefer explicit AI artifact markers whenever available. If markers are absent, only obvious reusable artifacts (complete code files, emails, documents, prompts, templates, SQL, JSON, HTML, CSS, JavaScript, resumes, proposals) should activate Smart Copy. Ordinary conversations, explanations, advice, reasoning, and teaching must never activate Smart Copy, regardless of message length.
 - Titles come from the marker (or are inferred from the artifact kind): "Python Script", "Marketing Email", "Lovable Prompt", "SQL Query", "Business Proposal". No "Generated Content".
 - Copy copies only the artifact body — no title, no chrome, no markers.
 - Explanations that surround an artifact stay outside the card as normal chat text.
@@ -34,7 +34,7 @@ One shared component used everywhere: AI responses, images, music, code, documen
 
 ## 5 & 6. Code blocks and live preview
 
-- Header: auto-detected language label, Copy, and Preview when supported. Detection covers Python, JS, TS, HTML, CSS, SQL, JSON, C++, Java, Go, Rust, PHP and more, including inference when the fence has no language.
+- Header: auto-detected language label, Copy, and Preview when supported. Detection covers Python, JS, TS, HTML, CSS, SQL, JSON, C++, Java, Go, Rust, PHP and more, including inference when the fence has no language.Only display the Live Preview button when the generated code can actually be previewed (for example HTML, CSS, JavaScript, React, Vue, Svelte, etc.). Do not display Preview for languages that cannot be rendered directly, such as Python, SQL, JSON, Java, Go, Rust, or C++.
 - Copy copies only the code.
 - Better readability: tuned syntax theme, line spacing, soft wrapping for long lines, horizontal scroll only where needed, mobile-friendly sizing.
 - Preview renders inline in a sandboxed interactive iframe (buttons, forms, navigation, scrolling all work) with a "Preview" label and Copy in the upper-right.
@@ -43,14 +43,14 @@ One shared component used everywhere: AI responses, images, music, code, documen
 ## 7. Chat intelligence
 
 - Send a rolling, summarised conversation context so long chats stay coherent without re-explaining.
-- Detect topic switches and drop stale reasoning when the user clearly moves on.
+- Detect topic switches and drop stale reasoning when the user clearly moves on.Preserve user preferences, active goals, implementation workflows, and project context when summarizing long conversations so the AI remembers ongoing work naturally without repeating earlier explanations.
 - Resolve references such as "that", "it", "the second idea" from recent turns.
 - New chats start with zero carry-over memory.
 - Titles regenerate as short, memorable, professional labels (max ~4 words).
 
 ## 8. Search, conversation management, pinning
 
-- Two search entry points: one at the top of the active chat, one in the drawer. Both search titles and message bodies, partial match, results update while typing.
+- Two search entry points: one at the top of the active chat, one in the drawer. Both search titles and message bodies, partial match, results update while typing.Support filtering search results by message type, including Images, Music, Code, Documents, AI Responses, and User Messages.
 - Selecting a result opens the conversation, scrolls to the message and highlights it briefly.
 - Long-press a conversation: Rename and Delete in a proper action menu; Delete asks for confirmation and touches only that conversation.
 - Pinning: Pin/Unpin on both user and AI messages, stored per conversation. A Pinned Messages panel reachable from the chat header lists preview, sender, date and time in chronological order; tapping jumps to and highlights the original message.
@@ -66,7 +66,7 @@ Edit, Select Text, Share, Details, Pin.
 
 ## 10. Image upload workflow
 
-- Selected images show as compact square thumbnails in a row above the composer, with remove buttons; the typed prompt stays in the input below, visually separate.
+- Selected images show as compact square thumbnails in a row above the composer, with remove buttons; the typed prompt stays in the input below, visually separate.When multiple images are uploaded, preserve their original upload order throughout upload, display, editing, regeneration, history, and download operations.
 - Sent messages render the image(s) first, then the prompt underneath as a separate element in the same message.
 - Real upload progress 0→100% driven by actual upload events, never frozen; the AI request fires only after upload completes.
 
@@ -81,7 +81,7 @@ Edit, Select Text, Share, Details, Pin.
 ## 12. Nova Music
 
 - New `/music` page: generate, history list, player. Chat keeps auto-detecting music requests and playing results inline.
-- Intent routing decides instrumental / background / full song / lyrics-based / continuation / modification / remix without asking the user.
+- Intent routing decides instrumental / background / full song / lyrics-based / continuation / modification / remix without asking the user.Also support automatic intent detection for Continue Song, Extend Instrumental, Replace Lyrics, Change Vocals, Remix Existing Music, and Create Variations without requiring additional user clarification whenever the intent is obvious.
 - History keeps title, prompt, date, duration and artwork where available, with Play, Download, Share, Regenerate.
 - Player: play, pause, seek, progress bar, current and remaining time, smooth behaviour.
 - Downloads get meaningful filenames derived from the request, never `audio.mp3`.
