@@ -12,10 +12,10 @@ import { useQuery } from "@tanstack/react-query";
 export const Route = createFileRoute("/_authenticated/profile/support")({
   head: () => ({
     meta: [
-      { title: "Contact Support — NovaMind AI" },
-      { name: "description", content: "Report a problem or ask the NovaMind AI Support Team for help." },
-      { property: "og:title", content: "Contact Support — NovaMind AI" },
-      { property: "og:description", content: "Report a problem or ask the NovaMind AI Support Team for help." },
+      { title: "Contact Support — Niza AI" },
+      { name: "description", content: "Report a problem or ask the Niza AI Support Team for help." },
+      { property: "og:title", content: "Contact Support — Niza AI" },
+      { property: "og:description", content: "Report a problem or ask the Niza AI Support Team for help." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -70,7 +70,7 @@ function Support() {
         if (!error) path = key;
       }
       const diagnostics = {
-        appVersion: "NovaMind AI",
+        appVersion: "Niza AI",
         device: navigator.userAgent,
         platform: navigator.platform,
         language: navigator.language,

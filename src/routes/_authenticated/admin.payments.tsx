@@ -73,7 +73,7 @@ function PaymentsAdmin() {
       </Link>
       <h1 className="text-2xl font-semibold">Payment Settings</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Manage Paystack keys and the NovaMind AI Premium plan.
+        Manage Paystack keys and the Niza AI Premium plan.
       </p>
 
       {/* Mode banner */}
@@ -147,7 +147,7 @@ function PaymentsAdmin() {
       {/* Premium plan */}
       <section className="mt-6 rounded-xl border border-border bg-card p-4">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-          <Package className="h-4 w-4" /> NovaMind AI Premium plan
+          <Package className="h-4 w-4" /> Niza AI Premium plan
         </h2>
         <div className="text-sm">
           <div>

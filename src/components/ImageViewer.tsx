@@ -121,7 +121,7 @@ export function ImageViewer({
     ctx.shadowColor = "rgba(0,0,0,0.45)";
     ctx.shadowBlur = size * 0.4;
     ctx.fillStyle = "rgba(255,255,255,0.78)";
-    ctx.fillText("NovaMind AI", w - pad, h - pad);
+    ctx.fillText("Niza AI", w - pad, h - pad);
     ctx.restore();
   }
 
@@ -181,7 +181,7 @@ export function ImageViewer({
 
   async function download() {
     try {
-      triggerDownload(await exportBlob(), `novamind-${Date.now()}.png`);
+      triggerDownload(await exportBlob(), `niza-${Date.now()}.png`);
       toast.success("Image downloaded.");
     } catch {
       toast.error("Could not export the image.");
@@ -191,7 +191,7 @@ export function ImageViewer({
   async function share() {
     try {
       const blob = await exportBlob();
-      const file = new File([blob], "novamind.png", { type: "image/png" });
+      const file = new File([blob], "niza.png", { type: "image/png" });
       if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({ files: [file] });
         return;

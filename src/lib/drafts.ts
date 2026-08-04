@@ -1,6 +1,6 @@
 // Auto-saved composer drafts, per chat thread. Survives reloads and crashes.
 
-const KEY = "novamind.drafts.v1";
+const KEY = "niza.drafts.v1";
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type Draft = {

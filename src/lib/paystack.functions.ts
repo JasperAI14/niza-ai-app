@@ -120,7 +120,7 @@ export const createOrRefreshPremiumPlan = createServerFn({ method: "POST" })
     const r = await paystackFetch("/plan", {
       method: "POST",
       body: JSON.stringify({
-        name: "NovaMind AI Premium",
+        name: "Niza AI Premium",
         interval: "monthly",
         amount,
         currency: "NGN",

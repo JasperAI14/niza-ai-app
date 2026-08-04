@@ -1,4 +1,4 @@
-import { NOVA_SYSTEM_PROMPT } from "@/lib/nova-knowledge";
+import { NIZA_SYSTEM_PROMPT } from "@/lib/niza-knowledge";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -106,17 +106,17 @@ async function adminClient() {
 // ============================================================
 // NOVA MODEL ROUTING
 // Internal engine names are never exposed to end users.
-//   Nova Chat 1.0   -> Grok (xAI)                  [GROK_API_KEY]
-//   Nova Chat 1.1   -> Gemini 2.5 Flash            [GeminichatAPI]
-//   Nova Vision 2.0 -> Gemini 2.5 Flash Image      [GeminiphotoAPI]
-//   Nova Vision 2.1 -> FLUX.1 / SDXL Inpainting    [HUGGINGFACE_API_KEY]
-//   Nova Music 3.0  -> lyria-3-preview             [GeminimusicAPI]
-//   Nova Music 3.1  -> lyria-3-pro-preview         [GeminimusicAPI]
+//   Niza Chat 1.0   -> Grok (xAI)                  [GROK_API_KEY]
+//   Niza Chat 1.1   -> Gemini 2.5 Flash            [GeminichatAPI]
+//   Niza Vision 2.0 -> Gemini 2.5 Flash Image      [GeminiphotoAPI]
+//   Niza Vision 2.1 -> FLUX.1 / SDXL Inpainting    [HUGGINGFACE_API_KEY]
+//   Niza Music 3.0  -> lyria-3-preview             [GeminimusicAPI]
+//   Niza Music 3.1  -> lyria-3-pro-preview         [GeminimusicAPI]
 // Lovable AI Gateway is kept as a silent last-resort fallback.
 // ============================================================
 
 type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
-const SYSTEM_PROMPT = NOVA_SYSTEM_PROMPT;
+const SYSTEM_PROMPT = NIZA_SYSTEM_PROMPT;
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -140,10 +140,10 @@ function dataUrlParts(dataUrl: string): { mimeType: string; data: string } {
   return { mimeType: m[1], data: m[2] };
 }
 
-// ---------------- Nova Chat 1.0 (Grok / xAI) ----------------
-async function novaChat10(messages: ChatMsg[]): Promise<string> {
+// ---------------- Niza Chat 1.0 (Grok / xAI) ----------------
+async function nizaChat10(messages: ChatMsg[]): Promise<string> {
   const key = process.env.GROK_API_KEY;
-  if (!key) throw new Error("nova-chat-1.0: no key");
+  if (!key) throw new Error("niza-chat-1.0: no key");
   const body = JSON.stringify({
     model: "grok-3",
     messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
@@ -178,10 +178,10 @@ async function novaChat10(messages: ChatMsg[]): Promise<string> {
       lastErr = e;
     }
   }
-  throw lastErr ?? new Error("nova-chat-1.0 failed");
+  throw lastErr ?? new Error("niza-chat-1.0 failed");
 }
 
-// ---------------- Nova Chat 1.1 (Gemini 2.5 Flash) ----------------
+// ---------------- Niza Chat 1.1 (Gemini 2.5 Flash) ----------------
 async function geminiGenerate(
   key: string,
   model: string,
@@ -200,9 +200,9 @@ async function geminiGenerate(
   return r.json();
 }
 
-async function novaChat11(messages: ChatMsg[]): Promise<string> {
+async function nizaChat11(messages: ChatMsg[]): Promise<string> {
   const key = process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("nova-chat-1.1: no key");
+  if (!key) throw new Error("niza-chat-1.1: no key");
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
     parts: [{ text: m.content }],
@@ -211,7 +211,7 @@ async function novaChat11(messages: ChatMsg[]): Promise<string> {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
   });
   const txt = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("");
-  if (!txt) throw new Error("nova-chat-1.1 empty");
+  if (!txt) throw new Error("niza-chat-1.1 empty");
   return txt;
 }
 
@@ -243,7 +243,7 @@ async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
       "HTTP-Referer": "https://pixel-text-ai.lovable.app",
-      "X-Title": "NovaMind AI",
+      "X-Title": "Niza AI",
     },
     body: JSON.stringify({
       model: "meta-llama/llama-3.3-70b-instruct:free",
@@ -277,8 +277,8 @@ async function callLovableText(messages: ChatMsg[]): Promise<string> {
 
 async function generateText(messages: ChatMsg[]): Promise<string> {
   const providers: Array<[string, (m: ChatMsg[]) => Promise<string>]> = [
-    ["nova-chat-1.0", novaChat10],
-    ["nova-chat-1.1", novaChat11],
+    ["niza-chat-1.0", nizaChat10],
+    ["niza-chat-1.1", nizaChat11],
     ["gateway", callLovableText],
     ["openrouter", callOpenRouterText],
     ["hf", callHuggingFaceText],
@@ -296,7 +296,7 @@ async function generateText(messages: ChatMsg[]): Promise<string> {
 }
 
 // ---------------- Vision (analysis) ----------------
-async function novaVisionAnalyze(text: string, images: string[]): Promise<string> {
+async function nizaVisionAnalyze(text: string, images: string[]): Promise<string> {
   const key = process.env.GeminiphotoAPI || process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
   if (key) {
     try {
@@ -330,7 +330,7 @@ async function novaVisionAnalyze(text: string, images: string[]): Promise<string
   return typeof txt === "string" ? txt : JSON.stringify(txt);
 }
 
-// ---------------- Nova Vision 2.0 (Gemini image) ----------------
+// ---------------- Niza Vision 2.0 (Gemini image) ----------------
 function extractInlineImage(j: any): ArrayBuffer {
   const parts = j?.candidates?.[0]?.content?.parts ?? [];
   for (const p of parts) {
@@ -340,9 +340,9 @@ function extractInlineImage(j: any): ArrayBuffer {
   throw new Error("no image in response");
 }
 
-async function novaVision20(prompt: string, inputImages: string[] = []): Promise<ArrayBuffer> {
+async function nizaVision20(prompt: string, inputImages: string[] = []): Promise<ArrayBuffer> {
   const key = process.env.GeminiphotoAPI || process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("nova-vision-2.0: no key");
+  if (!key) throw new Error("niza-vision-2.0: no key");
   const parts: any[] = [{ text: prompt }];
   for (const url of inputImages) parts.push({ inlineData: dataUrlParts(url) });
   const j = await geminiGenerate(key, "gemini-2.5-flash-image", [{ role: "user", parts }], {
@@ -351,10 +351,10 @@ async function novaVision20(prompt: string, inputImages: string[] = []): Promise
   return extractInlineImage(j);
 }
 
-// ---------------- Nova Vision 2.1 (FLUX.1 / SDXL Inpainting) ----------------
-async function novaVision21(prompt: string): Promise<ArrayBuffer> {
+// ---------------- Niza Vision 2.1 (FLUX.1 / SDXL Inpainting) ----------------
+async function nizaVision21(prompt: string): Promise<ArrayBuffer> {
   const key = process.env.HUGGINGFACE_API_KEY;
-  if (!key) throw new Error("nova-vision-2.1: no key");
+  if (!key) throw new Error("niza-vision-2.1: no key");
   const endpoints = [
     "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
     "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
@@ -377,13 +377,13 @@ async function novaVision21(prompt: string): Promise<ArrayBuffer> {
       lastErr = e;
     }
   }
-  throw lastErr ?? new Error("nova-vision-2.1 failed");
+  throw lastErr ?? new Error("niza-vision-2.1 failed");
 }
 
 // SDXL inpainting / image-to-image editing fallback.
-async function novaVision21Edit(prompt: string, imageDataUrl: string): Promise<ArrayBuffer> {
+async function nizaVision21Edit(prompt: string, imageDataUrl: string): Promise<ArrayBuffer> {
   const key = process.env.HUGGINGFACE_API_KEY;
-  if (!key) throw new Error("nova-vision-2.1: no key");
+  if (!key) throw new Error("niza-vision-2.1: no key");
   const { data } = dataUrlParts(imageDataUrl);
   const r = await fetch(
     "https://api-inference.huggingface.co/models/diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
@@ -450,10 +450,10 @@ async function callStability(prompt: string): Promise<ArrayBuffer> {
 
 async function generateImage(prompt: string): Promise<ArrayBuffer> {
   const providers: Array<[string, (p: string) => Promise<ArrayBuffer>]> = [
-    ["nova-vision-2.0", (p) => novaVision20(p)],
+    ["niza-vision-2.0", (p) => nizaVision20(p)],
     ["gateway-gpt-image", gatewayGptImage],
     ["gateway-gemini-image", gatewayGeminiImage],
-    ["nova-vision-2.1", novaVision21],
+    ["niza-vision-2.1", nizaVision21],
     ["stability", callStability],
   ];
   let lastErr: any = null;
@@ -502,9 +502,9 @@ async function gatewayImageEdit(prompt: string, imageDataUrls: string[]): Promis
 
 async function editImage(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
   const providers: Array<[string, () => Promise<ArrayBuffer>]> = [
-    ["nova-vision-2.0", () => novaVision20(prompt, imageDataUrls)],
+    ["niza-vision-2.0", () => nizaVision20(prompt, imageDataUrls)],
     ["gateway", () => gatewayImageEdit(prompt, imageDataUrls)],
-    ["nova-vision-2.1", () => novaVision21Edit(prompt, imageDataUrls[0])],
+    ["niza-vision-2.1", () => nizaVision21Edit(prompt, imageDataUrls[0])],
   ];
   let lastErr: any = null;
   for (const [name, fn] of providers) {
@@ -518,7 +518,7 @@ async function editImage(prompt: string, imageDataUrls: string[]): Promise<Array
   throw lastErr ?? new Error("image editing failed");
 }
 
-// ---------------- Nova Music 3.0 / 3.1 ----------------
+// ---------------- Niza Music 3.0 / 3.1 ----------------
 function extractAudio(j: any): { buf: ArrayBuffer; mime: string } | null {
   // Predict-style response
   const pred = j?.predictions?.[0];
@@ -537,9 +537,9 @@ function extractAudio(j: any): { buf: ArrayBuffer; mime: string } | null {
   return null;
 }
 
-async function novaMusic(prompt: string, tier: "short" | "song"): Promise<{ buf: ArrayBuffer; mime: string }> {
+async function nizaMusic(prompt: string, tier: "short" | "song"): Promise<{ buf: ArrayBuffer; mime: string }> {
   const key = process.env.GeminimusicAPI || process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("nova-music: no key");
+  if (!key) throw new Error("niza-music: no key");
   const model = tier === "song" ? "lyria-3-pro-preview" : "lyria-3-preview";
   const attempts: Array<{ url: string; body: any }> = [
     {
@@ -578,7 +578,7 @@ async function novaMusic(prompt: string, tier: "short" | "song"): Promise<{ buf:
       console.error("[music] attempt failed:", (e as Error).message);
     }
   }
-  throw lastErr ?? new Error("nova-music failed");
+  throw lastErr ?? new Error("niza-music failed");
 }
 
 // ---------------- Admin / plan helpers ----------------
@@ -931,7 +931,7 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (music) {
       try {
         if (!isAdmin) await sleep(FREE_IMAGE_DELAY_MS);
-        const { buf, mime } = await novaMusic(music.prompt, music.tier);
+        const { buf, mime } = await nizaMusic(music.prompt, music.tier);
         const ext = mime.includes("mpeg") ? "mp3" : mime.includes("ogg") ? "ogg" : "wav";
         const path = `${userId}/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage
@@ -971,7 +971,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       }
     } else if (hasImages) {
       try {
-        assistantContent = await novaVisionAnalyze(data.content, data.images!);
+        assistantContent = await nizaVisionAnalyze(data.content, data.images!);
         if (!isAdmin) await bumpText();
       } catch (e) {
         console.error("vision failed:", e);

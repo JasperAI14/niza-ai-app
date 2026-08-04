@@ -20,7 +20,7 @@ function titleCase(word: string) {
 }
 
 /** Build a short, descriptive base name (max ~15 words) from a prompt. */
-export function smartBaseName(prompt: string, fallback = "NovaMind Result"): string {
+export function smartBaseName(prompt: string, fallback = "Niza Result"): string {
   const cleaned = (prompt || "")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/https?:\/\/\S+/g, " ")
@@ -49,7 +49,7 @@ export function sanitizeFilename(name: string): string {
       .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
-      .slice(0, 90) || "NovaMind File"
+      .slice(0, 90) || "Niza File"
   );
 }
 
@@ -81,7 +81,7 @@ export function smartFilename(opts: {
     document: " Document",
     text: "",
   };
-  let base = smartBaseName(prompt, fallback ?? "NovaMind Result");
+  let base = smartBaseName(prompt, fallback ?? "Niza Result");
   const suffix = suffixByKind[kind];
   if (suffix && !base.toLowerCase().includes(suffix.trim().toLowerCase())) base += suffix;
   return `${sanitizeFilename(base)}.${extensionFor(kind, hint)}`;

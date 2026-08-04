@@ -151,7 +151,7 @@ export async function renderShareCard(opts: ShareCardOptions): Promise<Blob> {
   ctx.fillStyle = theme.text;
   ctx.font = '600 32px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   ctx.textBaseline = "middle";
-  ctx.fillText("NovaMind AI", PAD + 56, 80);
+  ctx.fillText("Niza AI", PAD + 56, 80);
 
   let y = headerH;
 
@@ -183,7 +183,7 @@ export async function renderShareCard(opts: ShareCardOptions): Promise<Blob> {
   if (truncated) {
     ctx.fillStyle = theme.muted;
     ctx.font = 'italic 28px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-    ctx.fillText("…continued in NovaMind AI", PAD, y + 8);
+    ctx.fillText("…continued in Niza AI", PAD, y + 8);
   }
 
   // Footer
@@ -192,7 +192,7 @@ export async function renderShareCard(opts: ShareCardOptions): Promise<Blob> {
   ctx.fillStyle = theme.muted;
   ctx.font = '400 26px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
   ctx.textBaseline = "middle";
-  ctx.fillText(opts.footer ?? "Created with NovaMind AI", PAD, H - footerH / 2 + 6);
+  ctx.fillText(opts.footer ?? "Created with Niza AI", PAD, H - footerH / 2 + 6);
 
   return await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not render share card."))), "image/png", 0.95),
