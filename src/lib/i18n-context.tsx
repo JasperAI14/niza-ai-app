@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { detectBrowserLang, isRtl, isSupportedLang, translator, type LangCode } from "./i18n";
 
-const STORAGE_KEY = "novamind.lang";
+const STORAGE_KEY = "niza.lang";
 
 type Ctx = {
   lang: LangCode;

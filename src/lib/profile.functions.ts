@@ -49,7 +49,7 @@ async function signAvatar(db: any, path: string | null): Promise<string | null> 
 }
 
 function fallbackName(email: string | null) {
-  if (!email) return "NovaMind user";
+  if (!email) return "Niza user";
   return email.split("@")[0];
 }
 
@@ -203,7 +203,7 @@ async function aiReply(review: { rating: number; body: string; escalated: boolea
   const guidance = review.escalated
     ? `Write a short reply confirming the feedback has been passed to the Support Team for careful review, and that they will respond as soon as possible.`
     : `Write a short, warm thank-you reply that references what the user said.`;
-  const prompt = `You are a professional customer support representative for NovaMind AI. ${guidance}
+  const prompt = `You are a professional customer support representative for Niza AI. ${guidance}
 Rules: 2 sentences maximum. Warm, human and professional. Never use the words recorded, logged or stored. Never mention administrators, developers, models or providers — only "our Support Team" or "we". Do not repeat generic filler.
 
 Rating: ${review.rating}/5
@@ -225,7 +225,7 @@ Review: ${review.body}`;
   } catch {
     return review.escalated
       ? "Thank you for bringing this to our attention. Your feedback has been forwarded to our Support Team for further review, and we'll respond as soon as possible."
-      : "Thank you for taking the time to share your feedback. We truly appreciate your support, and your comments help us continue improving NovaMind AI.";
+      : "Thank you for taking the time to share your feedback. We truly appreciate your support, and your comments help us continue improving Niza AI.";
   }
 }
 

@@ -1,4 +1,4 @@
-// NovaMind AI theme system — persisted in localStorage, applied to <html>.
+// Niza AI theme system — persisted in localStorage, applied to <html>.
 
 export type ThemeMode = "system" | "dark" | "light";
 export type AccentKey = "violet" | "cyan" | "emerald" | "amber" | "rose";

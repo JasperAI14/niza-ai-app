@@ -6,8 +6,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Reset password — NovaMind AI" },
-      { name: "description", content: "Set a new password for your NovaMind AI account." },
+      { title: "Reset password — Niza AI" },
+      { name: "description", content: "Set a new password for your Niza AI account." },
     ],
   }),
   ssr: false,

@@ -85,7 +85,7 @@ export function MusicCard({
       const o = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = o;
-      a.download = `${(title || "novamind-track").replace(/[^\w-]+/g, "-").slice(0, 40)}.wav`;
+      a.download = `${(title || "niza-track").replace(/[^\w-]+/g, "-").slice(0, 40)}.wav`;
       document.body.appendChild(a);
       a.click();
       a.remove();

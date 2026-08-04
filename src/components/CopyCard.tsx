@@ -22,11 +22,11 @@ function detectFilename(content: string, title: string): string {
   const codeMatch = /```(\w+)?/.exec(content);
   if (title === "Code" && codeMatch) {
     const ext = LANG_EXT[(codeMatch[1] || "").toLowerCase()] || "txt";
-    return `novamind-${stamp}.${ext}`;
+    return `niza-${stamp}.${ext}`;
   }
-  if (title === "Guide" || /^#{1,3}\s/m.test(content)) return `novamind-${stamp}.md`;
-  if (title === "Prompt") return `novamind-prompt-${stamp}.txt`;
-  return `novamind-${stamp}.txt`;
+  if (title === "Guide" || /^#{1,3}\s/m.test(content)) return `niza-${stamp}.md`;
+  if (title === "Prompt") return `niza-prompt-${stamp}.txt`;
+  return `niza-${stamp}.txt`;
 }
 
 function downloadText(content: string, filename: string) {

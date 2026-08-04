@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NovaMindApp } from "@/components/NovaMindApp";
+import { NizaApp } from "@/components/NizaApp";
 
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
-      { title: "NovaMind AI — Chat, Code & Images" },
+      { title: "Niza AI — Chat, Code & Images" },
       { name: "description", content: "Your private AI assistant for chat, coding help, and image generation." },
     ],
   }),
-  component: NovaMindApp,
+  component: NizaApp,
 });

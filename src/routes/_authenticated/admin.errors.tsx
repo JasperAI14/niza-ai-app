@@ -7,10 +7,10 @@ import { PageShell, Card } from "@/components/PageShell";
 export const Route = createFileRoute("/_authenticated/admin/errors")({
   head: () => ({
     meta: [
-      { title: "Error Reports — NovaMind AI" },
-      { name: "description", content: "Administrator view of automatic NovaMind AI error reports." },
-      { property: "og:title", content: "Error Reports — NovaMind AI" },
-      { property: "og:description", content: "Administrator view of automatic NovaMind AI error reports." },
+      { title: "Error Reports — Niza AI" },
+      { name: "description", content: "Administrator view of automatic Niza AI error reports." },
+      { property: "og:title", content: "Error Reports — Niza AI" },
+      { property: "og:description", content: "Administrator view of automatic Niza AI error reports." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],

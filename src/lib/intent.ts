@@ -19,8 +19,8 @@ export function detectImageRequest(text: string): string | null {
 }
 
 // ---------------- Music intent ----------------
-// Nova Music 3.0 → short instrumental / melody / beat
-// Nova Music 3.1 → full song generated from (or with) lyrics
+// Niza Music 3.0 → short instrumental / melody / beat
+// Niza Music 3.1 → full song generated from (or with) lyrics
 export type MusicIntent = { prompt: string; tier: "short" | "song" };
 
 const MUSIC_NOUNS =

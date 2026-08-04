@@ -19,10 +19,10 @@ import { PageShell } from "@/components/PageShell";
 export const Route = createFileRoute("/_authenticated/profile/")({
   head: () => ({
     meta: [
-      { title: "Profile — NovaMind AI" },
-      { name: "description", content: "Manage your NovaMind AI profile, privacy, support and app information." },
-      { property: "og:title", content: "Profile — NovaMind AI" },
-      { property: "og:description", content: "Manage your NovaMind AI profile, privacy, support and app information." },
+      { title: "Profile — Niza AI" },
+      { name: "description", content: "Manage your Niza AI profile, privacy, support and app information." },
+      { property: "og:title", content: "Profile — Niza AI" },
+      { property: "og:description", content: "Manage your Niza AI profile, privacy, support and app information." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -119,13 +119,13 @@ function ProfileHub() {
           to="/profile/feedback"
           icon={<MessageSquareHeart className="h-4 w-4" />}
           label="Send Feedback"
-          hint="Rate NovaMind AI and share your thoughts"
+          hint="Rate Niza AI and share your thoughts"
         />
         <Row
           to="/profile/about"
           icon={<Info className="h-4 w-4" />}
-          label="About NovaMind AI"
-          hint="What NovaMind AI is and who built it"
+          label="About Niza AI"
+          hint="What Niza AI is and who built it"
         />
       </div>
 

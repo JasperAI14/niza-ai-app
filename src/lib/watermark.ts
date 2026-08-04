@@ -1,7 +1,7 @@
 // Client-side watermarking for free-plan generated images.
 // Free users see the mark in-app (CSS overlay) and get it baked into downloads.
 
-const MARK = "NovaMind AI";
+const MARK = "Niza AI";
 
 export async function bakeWatermark(src: string): Promise<Blob> {
   const img = await loadImage(src);
@@ -39,7 +39,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-export async function downloadImageWithWatermark(url: string, watermarked: boolean, filename = "novamind.png") {
+export async function downloadImageWithWatermark(url: string, watermarked: boolean, filename = "niza.png") {
   try {
     const blob = watermarked ? await bakeWatermark(url) : await (await fetch(url, { mode: "cors" })).blob();
     triggerDownload(blob, filename);

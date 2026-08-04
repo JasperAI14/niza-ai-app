@@ -1,7 +1,7 @@
 {
-  "name": "NovaMind AI",
-  "short_name": "NovaMind",
-  "description": "NovaMind AI — chat, generate images, edit images, and analyze uploads in one unified AI assistant.",
+  "name": "Niza AI",
+  "short_name": "Niza",
+  "description": "Niza AI — chat, generate images, edit images, and analyze uploads in one unified AI assistant.",
   "id": "/",
   "start_url": "/?source=pwa",
   "scope": "/",
@@ -29,21 +29,21 @@
       "sizes": "640x1280",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "NovaMind AI chat on mobile"
+      "label": "Niza AI chat on mobile"
     },
     {
       "src": "/screenshot-desktop.png",
       "sizes": "1280x800",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "NovaMind AI workspace on desktop"
+      "label": "Niza AI workspace on desktop"
     }
   ],
   "shortcuts": [
     {
       "name": "New Chat",
       "short_name": "New Chat",
-      "description": "Start a new NovaMind conversation",
+      "description": "Start a new Niza conversation",
       "url": "/?new=1",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },

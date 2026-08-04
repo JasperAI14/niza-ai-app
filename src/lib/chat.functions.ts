@@ -1,11 +1,25 @@
-import { NOVA_SYSTEM_PROMPT } from "@/lib/nova-knowledge";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
-import { detectImageRequest, detectImageEdit, detectMusicRequest } from "./intent";
+import type { Plan } from "./limits";
+import {
+  adminClient,
+  deriveTitle,
+  editImage,
+  FREE_CLEAN_IMAGES,
+  generateImage,
+  generateText,
+  isAdminUser,
+  loadOrResetUsage,
+  loadProfile,
+  mediaDelay,
+  nizaMusic,
+  nizaVisionAnalyze,
+  routeRequest,
+  smartTitle,
+} from "./chat.server";
 
-// ---------- types ----------
+// ---------- types (erased at build time) ----------
 export type DBMessage = {
   id: string;
   thread_id: string;
@@ -20,11 +34,7 @@ export type DBMessage = {
 
 export type DBThread = { id: string; title: string; updated_at: string };
 
-export type ProfileData = {
-  plan: Plan;
-  promo_used: boolean;
-  email: string | null;
-};
+export type ProfileData = { plan: Plan; promo_used: boolean; email: string | null };
 
 export type UsageData = {
   text_count: number;
@@ -35,572 +45,6 @@ export type UsageData = {
   image_limit: number;
 };
 
-// ---------- helpers (server only, inside handlers) ----------
-async function loadProfile(supabase: any, userId: string): Promise<ProfileData> {
-  const { data } = await supabase
-    .from("profiles")
-    .select("plan, promo_used, email")
-    .eq("id", userId)
-    .maybeSingle();
-  if (data) return data as ProfileData;
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin.from("profiles").insert({ id: userId });
-  return { plan: "free", promo_used: false, email: null };
-}
-
-async function loadOrResetUsage(supabase: any, userId: string, plan: Plan): Promise<UsageData> {
-  const lim = LIMITS[plan];
-  const { data } = await supabase
-    .from("usage")
-    .select("text_count, image_count, text_window_start, image_window_start")
-    .eq("user_id", userId)
-    .maybeSingle();
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  if (!data) {
-    await supabaseAdmin.from("usage").insert({ user_id: userId });
-    return {
-      text_count: 0,
-      image_count: 0,
-      text_window_start: new Date().toISOString(),
-      image_window_start: new Date().toISOString(),
-      text_limit: lim.text,
-      image_limit: lim.image,
-    };
-  }
-  const now = Date.now();
-  const updates: Record<string, any> = {};
-  let text_count = data.text_count;
-  let image_count = data.image_count;
-  let text_window_start = data.text_window_start;
-  let image_window_start = data.image_window_start;
-  if (now - new Date(data.text_window_start).getTime() >= TEXT_RESET_MS) {
-    text_count = 0;
-    text_window_start = new Date().toISOString();
-    updates.text_count = 0;
-    updates.text_window_start = text_window_start;
-  }
-  if (now - new Date(data.image_window_start).getTime() >= IMAGE_RESET_MS) {
-    image_count = 0;
-    image_window_start = new Date().toISOString();
-    updates.image_count = 0;
-    updates.image_window_start = image_window_start;
-  }
-  if (Object.keys(updates).length > 0) {
-    await (supabaseAdmin as any).from("usage").update(updates).eq("user_id", userId);
-  }
-  return {
-    text_count,
-    image_count,
-    text_window_start,
-    image_window_start,
-    text_limit: lim.text,
-    image_limit: lim.image,
-  };
-}
-
-async function adminClient() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
-}
-
-// ============================================================
-// NOVA MODEL ROUTING
-// Internal engine names are never exposed to end users.
-//   Nova Chat 1.0   -> Grok (xAI)                  [GROK_API_KEY]
-//   Nova Chat 1.1   -> Gemini 2.5 Flash            [GeminichatAPI]
-//   Nova Vision 2.0 -> Gemini 2.5 Flash Image      [GeminiphotoAPI]
-//   Nova Vision 2.1 -> FLUX.1 / SDXL Inpainting    [HUGGINGFACE_API_KEY]
-//   Nova Music 3.0  -> lyria-3-preview             [GeminimusicAPI]
-//   Nova Music 3.1  -> lyria-3-pro-preview         [GeminimusicAPI]
-// Lovable AI Gateway is kept as a silent last-resort fallback.
-// ============================================================
-
-type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
-const SYSTEM_PROMPT = NOVA_SYSTEM_PROMPT;
-
-const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
-
-function b64ToBuffer(b64: string): ArrayBuffer {
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes.buffer;
-}
-
-function bufferToB64(buf: ArrayBuffer): string {
-  const bytes = new Uint8Array(buf);
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
-}
-
-function dataUrlParts(dataUrl: string): { mimeType: string; data: string } {
-  const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl);
-  if (!m) throw new Error("bad data url");
-  return { mimeType: m[1], data: m[2] };
-}
-
-// ---------------- Nova Chat 1.0 (Grok / xAI) ----------------
-async function novaChat10(messages: ChatMsg[]): Promise<string> {
-  const key = process.env.GROK_API_KEY;
-  if (!key) throw new Error("nova-chat-1.0: no key");
-  const body = JSON.stringify({
-    model: "grok-3",
-    messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-    temperature: 0.7,
-  });
-  // xAI first; some deployments provision this key against the Groq API instead.
-  const attempts: Array<{ url: string; body: string }> = [
-    { url: "https://api.x.ai/v1/chat/completions", body },
-    {
-      url: "https://api.groq.com/openai/v1/chat/completions",
-      body: JSON.stringify({
-        model: "llama-3.3-70b-versatile",
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-        temperature: 0.7,
-      }),
-    },
-  ];
-  let lastErr: any = null;
-  for (const a of attempts) {
-    try {
-      const r = await fetch(a.url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: a.body,
-      });
-      if (!r.ok) throw new Error(`${r.status}`);
-      const j = await r.json();
-      const txt = j.choices?.[0]?.message?.content;
-      if (!txt) throw new Error("empty");
-      return txt;
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr ?? new Error("nova-chat-1.0 failed");
-}
-
-// ---------------- Nova Chat 1.1 (Gemini 2.5 Flash) ----------------
-async function geminiGenerate(
-  key: string,
-  model: string,
-  contents: any[],
-  extra: Record<string, any> = {},
-): Promise<any> {
-  const r = await fetch(`${GEMINI_BASE}/models/${model}:generateContent?key=${key}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents, ...extra }),
-  });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`${model} ${r.status} ${t.slice(0, 160)}`);
-  }
-  return r.json();
-}
-
-async function novaChat11(messages: ChatMsg[]): Promise<string> {
-  const key = process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("nova-chat-1.1: no key");
-  const contents = messages.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
-  const j = await geminiGenerate(key, "gemini-2.5-flash", contents, {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-  });
-  const txt = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("");
-  if (!txt) throw new Error("nova-chat-1.1 empty");
-  return txt;
-}
-
-// ---------------- Text fallbacks ----------------
-async function callHuggingFaceText(messages: ChatMsg[]): Promise<string> {
-  const key = process.env.HUGGINGFACE_API_KEY;
-  if (!key) throw new Error("no hf key");
-  const r = await fetch("https://router.huggingface.co/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "meta-llama/Llama-3.1-8B-Instruct:novita",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-    }),
-  });
-  if (!r.ok) throw new Error("hf " + r.status);
-  const j = await r.json();
-  const txt = j.choices?.[0]?.message?.content;
-  if (!txt) throw new Error("hf empty");
-  return txt;
-}
-
-async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("no openrouter key");
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://pixel-text-ai.lovable.app",
-      "X-Title": "NovaMind AI",
-    },
-    body: JSON.stringify({
-      model: "meta-llama/llama-3.3-70b-instruct:free",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-    }),
-  });
-  if (!r.ok) throw new Error(`openrouter ${r.status}`);
-  const j = await r.json();
-  const txt = j.choices?.[0]?.message?.content;
-  if (!txt) throw new Error("openrouter empty");
-  return txt;
-}
-
-async function callLovableText(messages: ChatMsg[]): Promise<string> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("no lovable key");
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-3.6-flash",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-    }),
-  });
-  if (!r.ok) throw new Error(`lovable text ${r.status}`);
-  const j = await r.json();
-  const txt = j.choices?.[0]?.message?.content;
-  if (!txt) throw new Error("lovable text empty");
-  return txt;
-}
-
-async function generateText(messages: ChatMsg[]): Promise<string> {
-  const providers: Array<[string, (m: ChatMsg[]) => Promise<string>]> = [
-    ["nova-chat-1.0", novaChat10],
-    ["nova-chat-1.1", novaChat11],
-    ["gateway", callLovableText],
-    ["openrouter", callOpenRouterText],
-    ["hf", callHuggingFaceText],
-  ];
-  let lastErr: any = null;
-  for (const [name, p] of providers) {
-    try {
-      return await p(messages);
-    } catch (e) {
-      lastErr = e;
-      console.error(`[text] ${name} failed:`, (e as Error).message);
-    }
-  }
-  throw lastErr ?? new Error("all text providers failed");
-}
-
-// ---------------- Vision (analysis) ----------------
-async function novaVisionAnalyze(text: string, images: string[]): Promise<string> {
-  const key = process.env.GeminiphotoAPI || process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (key) {
-    try {
-      const parts: any[] = [{ text: text || "Please analyze the attached image(s)." }];
-      for (const url of images) parts.push({ inlineData: dataUrlParts(url) });
-      const j = await geminiGenerate(key, "gemini-2.5-flash", [{ role: "user", parts }], {
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-      });
-      const txt = j.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("");
-      if (txt) return txt;
-    } catch (e) {
-      console.error("[vision] gemini failed:", (e as Error).message);
-    }
-  }
-  const lkey = process.env.LOVABLE_API_KEY;
-  if (!lkey) throw new Error("vision unavailable");
-  const content: any[] = [{ type: "text", text: text || "Please analyze the attached image(s)." }];
-  for (const url of images) content.push({ type: "image_url", image_url: { url } });
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${lkey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content }],
-    }),
-  });
-  if (!r.ok) throw new Error(`vision gateway ${r.status}`);
-  const j = await r.json();
-  const txt = j.choices?.[0]?.message?.content;
-  if (!txt) throw new Error("vision empty");
-  return typeof txt === "string" ? txt : JSON.stringify(txt);
-}
-
-// ---------------- Nova Vision 2.0 (Gemini image) ----------------
-function extractInlineImage(j: any): ArrayBuffer {
-  const parts = j?.candidates?.[0]?.content?.parts ?? [];
-  for (const p of parts) {
-    const d = p?.inlineData?.data ?? p?.inline_data?.data;
-    if (d) return b64ToBuffer(d);
-  }
-  throw new Error("no image in response");
-}
-
-async function novaVision20(prompt: string, inputImages: string[] = []): Promise<ArrayBuffer> {
-  const key = process.env.GeminiphotoAPI || process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("nova-vision-2.0: no key");
-  const parts: any[] = [{ text: prompt }];
-  for (const url of inputImages) parts.push({ inlineData: dataUrlParts(url) });
-  const j = await geminiGenerate(key, "gemini-2.5-flash-image", [{ role: "user", parts }], {
-    generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
-  });
-  return extractInlineImage(j);
-}
-
-// ---------------- Nova Vision 2.1 (FLUX.1 / SDXL Inpainting) ----------------
-async function novaVision21(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.HUGGINGFACE_API_KEY;
-  if (!key) throw new Error("nova-vision-2.1: no key");
-  const endpoints = [
-    "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
-    "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell",
-    "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
-  ];
-  let lastErr: any = null;
-  for (const url of endpoints) {
-    try {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "image/png" },
-        body: JSON.stringify({ inputs: prompt }),
-      });
-      if (!r.ok) {
-        lastErr = new Error(`hf ${r.status}`);
-        continue;
-      }
-      return await r.arrayBuffer();
-    } catch (e) {
-      lastErr = e;
-    }
-  }
-  throw lastErr ?? new Error("nova-vision-2.1 failed");
-}
-
-// SDXL inpainting / image-to-image editing fallback.
-async function novaVision21Edit(prompt: string, imageDataUrl: string): Promise<ArrayBuffer> {
-  const key = process.env.HUGGINGFACE_API_KEY;
-  if (!key) throw new Error("nova-vision-2.1: no key");
-  const { data } = dataUrlParts(imageDataUrl);
-  const r = await fetch(
-    "https://api-inference.huggingface.co/models/diffusers/stable-diffusion-xl-1.0-inpainting-0.1",
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "image/png" },
-      body: JSON.stringify({ inputs: prompt, image: data }),
-    },
-  );
-  if (!r.ok) throw new Error(`hf inpaint ${r.status}`);
-  return r.arrayBuffer();
-}
-
-// ---------------- Gateway image fallbacks ----------------
-async function gatewayGptImage(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("no lovable key");
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "openai/gpt-image-2", prompt, size: "1024x1024", quality: "low", n: 1 }),
-  });
-  if (!r.ok) throw new Error(`gateway gpt-image ${r.status}`);
-  const j = await r.json();
-  const b64 = j?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("gateway gpt-image empty");
-  return b64ToBuffer(b64);
-}
-
-async function gatewayGeminiImage(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("no lovable key");
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [{ role: "user", content: prompt }],
-      modalities: ["image", "text"],
-    }),
-  });
-  if (!r.ok) throw new Error(`gateway gemini-image ${r.status}`);
-  const j = await r.json();
-  const b64 = j?.data?.[0]?.b64_json;
-  if (!b64) throw new Error("gateway gemini-image empty");
-  return b64ToBuffer(b64);
-}
-
-async function callStability(prompt: string): Promise<ArrayBuffer> {
-  const key = process.env.STABILITY_API_KEY;
-  if (!key) throw new Error("no stability");
-  const form = new FormData();
-  form.append("prompt", prompt);
-  form.append("output_format", "png");
-  form.append("aspect_ratio", "1:1");
-  const r = await fetch("https://api.stability.ai/v2beta/stable-image/generate/core", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, Accept: "image/*" },
-    body: form,
-  });
-  if (!r.ok) throw new Error(`stability ${r.status}`);
-  return r.arrayBuffer();
-}
-
-async function generateImage(prompt: string): Promise<ArrayBuffer> {
-  const providers: Array<[string, (p: string) => Promise<ArrayBuffer>]> = [
-    ["nova-vision-2.0", (p) => novaVision20(p)],
-    ["gateway-gpt-image", gatewayGptImage],
-    ["gateway-gemini-image", gatewayGeminiImage],
-    ["nova-vision-2.1", novaVision21],
-    ["stability", callStability],
-  ];
-  let lastErr: any = null;
-  for (const [name, fn] of providers) {
-    try {
-      const buf = await fn(prompt);
-      console.log(`[image] ${name} ok`);
-      return buf;
-    } catch (e) {
-      lastErr = e;
-      console.error(`[image] ${name} failed:`, (e as Error).message);
-    }
-  }
-  throw lastErr ?? new Error("all image providers failed");
-}
-
-async function gatewayImageEdit(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("no lovable key");
-  const content: any[] = [{ type: "text", text: prompt }];
-  for (const url of imageDataUrls) content.push({ type: "image_url", image_url: { url } });
-  const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash-image",
-      messages: [{ role: "user", content }],
-      modalities: ["image", "text"],
-    }),
-  });
-  if (!r.ok) throw new Error(`gateway image-edit ${r.status}`);
-  const j = await r.json();
-  const msg = j?.choices?.[0]?.message;
-  let dataUrl: string | undefined;
-  if (Array.isArray(msg?.images) && msg.images[0]?.image_url?.url) dataUrl = msg.images[0].image_url.url;
-  else if (Array.isArray(msg?.content)) {
-    const blk = msg.content.find((c: any) => c?.type === "image_url" || c?.image_url);
-    dataUrl = blk?.image_url?.url;
-  }
-  if (!dataUrl) throw new Error("gateway image-edit empty");
-  if (dataUrl.startsWith("data:")) return b64ToBuffer(dataUrl.split(",")[1]);
-  const imgR = await fetch(dataUrl);
-  if (!imgR.ok) throw new Error("image-edit fetch " + imgR.status);
-  return imgR.arrayBuffer();
-}
-
-async function editImage(prompt: string, imageDataUrls: string[]): Promise<ArrayBuffer> {
-  const providers: Array<[string, () => Promise<ArrayBuffer>]> = [
-    ["nova-vision-2.0", () => novaVision20(prompt, imageDataUrls)],
-    ["gateway", () => gatewayImageEdit(prompt, imageDataUrls)],
-    ["nova-vision-2.1", () => novaVision21Edit(prompt, imageDataUrls[0])],
-  ];
-  let lastErr: any = null;
-  for (const [name, fn] of providers) {
-    try {
-      return await fn();
-    } catch (e) {
-      lastErr = e;
-      console.error(`[image-edit] ${name} failed:`, (e as Error).message);
-    }
-  }
-  throw lastErr ?? new Error("image editing failed");
-}
-
-// ---------------- Nova Music 3.0 / 3.1 ----------------
-function extractAudio(j: any): { buf: ArrayBuffer; mime: string } | null {
-  // Predict-style response
-  const pred = j?.predictions?.[0];
-  const predB64 = pred?.audioContent ?? pred?.bytesBase64Encoded ?? pred?.audio;
-  if (typeof predB64 === "string" && predB64.length > 100) {
-    return { buf: b64ToBuffer(predB64), mime: pred?.mimeType ?? "audio/wav" };
-  }
-  // generateContent-style response
-  const parts = j?.candidates?.[0]?.content?.parts ?? [];
-  for (const p of parts) {
-    const inline = p?.inlineData ?? p?.inline_data;
-    if (inline?.data && String(inline.mimeType ?? inline.mime_type ?? "").startsWith("audio")) {
-      return { buf: b64ToBuffer(inline.data), mime: inline.mimeType ?? inline.mime_type };
-    }
-  }
-  return null;
-}
-
-async function novaMusic(prompt: string, tier: "short" | "song"): Promise<{ buf: ArrayBuffer; mime: string }> {
-  const key = process.env.GeminimusicAPI || process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("nova-music: no key");
-  const model = tier === "song" ? "lyria-3-pro-preview" : "lyria-3-preview";
-  const attempts: Array<{ url: string; body: any }> = [
-    {
-      url: `${GEMINI_BASE}/models/${model}:predict?key=${key}`,
-      body: {
-        instances: [{ prompt }],
-        parameters: { sampleCount: 1, ...(tier === "short" ? { durationSeconds: 30 } : {}) },
-      },
-    },
-    {
-      url: `${GEMINI_BASE}/models/${model}:generateContent?key=${key}`,
-      body: {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ["AUDIO"] },
-      },
-    },
-  ];
-  let lastErr: any = null;
-  for (const a of attempts) {
-    try {
-      const r = await fetch(a.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(a.body),
-      });
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        throw new Error(`${model} ${r.status} ${t.slice(0, 160)}`);
-      }
-      const j = await r.json();
-      const out = extractAudio(j);
-      if (!out) throw new Error(`${model} returned no audio`);
-      return out;
-    } catch (e) {
-      lastErr = e;
-      console.error("[music] attempt failed:", (e as Error).message);
-    }
-  }
-  throw lastErr ?? new Error("nova-music failed");
-}
-
-// ---------------- Admin / plan helpers ----------------
-const DEV_EMAILS = (process.env.ADMIN_EMAILS ?? "paschalsoromtochukwu@gmail.com")
-  .split(",")
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
-
-async function isAdminUser(supabase: any, userId: string, email: string | null): Promise<boolean> {
-  if (email && DEV_EMAILS.includes(email.toLowerCase())) return true;
-  try {
-    const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-    return !!data;
-  } catch {
-    return false;
-  }
-}
-
-const FREE_IMAGE_DELAY_MS = 10_000;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-
 // ---------- SERVER FUNCTIONS ----------
 
 export const getMe = createServerFn({ method: "GET" })
@@ -610,7 +54,11 @@ export const getMe = createServerFn({ method: "GET" })
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
     const isAdmin = await isAdminUser(supabase, userId, profile.email);
-    return { profile, usage, isAdmin };
+    const cleanImagesLeft =
+      profile.plan === "premium" || isAdmin
+        ? null
+        : Math.max(0, FREE_CLEAN_IMAGES - usage.image_count);
+    return { profile, usage, isAdmin, cleanImagesLeft };
   });
 
 export const submitPromo = createServerFn({ method: "POST" })
@@ -624,11 +72,12 @@ export const submitPromo = createServerFn({ method: "POST" })
     const isValid = !!serverCode && data.code.trim().toLowerCase() === serverCode;
     const plan: Plan = isValid ? "premium" : "free";
     const admin = await adminClient();
-    await admin
-      .from("profiles")
-      .update({ plan, promo_used: true })
-      .eq("id", userId);
-    return { ok: true, plan, message: isValid ? "Promo accepted — Premium unlocked!" : "Invalid promo code — continuing as Free." };
+    await admin.from("profiles").update({ plan, promo_used: true }).eq("id", userId);
+    return {
+      ok: true,
+      plan,
+      message: isValid ? "Promo accepted — Premium unlocked!" : "Invalid promo code — continuing as Free.",
+    };
   });
 
 export const listThreads = createServerFn({ method: "GET" })
@@ -642,7 +91,7 @@ export const listThreads = createServerFn({ method: "GET" })
       .order("updated_at", { ascending: false });
     if (error) {
       console.error("[listThreads] DB error:", error);
-      throw new Error("Failed to load threads. Please try again.");
+      throw new Error("Failed to load chats. Please try again.");
     }
     return (data ?? []) as DBThread[];
   });
@@ -662,7 +111,6 @@ export const getThreadMessages = createServerFn({ method: "GET" })
       console.error("[getThreadMessages] DB error:", error);
       throw new Error("Failed to load messages. Please try again.");
     }
-    // sign storage URLs
     const out: DBMessage[] = [];
     for (const m of msgs ?? []) {
       let img: string | null = m.image_url;
@@ -690,25 +138,37 @@ export const searchMessages = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const term = data.q.replace(/[%_,]/g, " ").trim();
-    if (!term) return [];
-    const { data: rows, error } = await supabase
-      .from("messages")
-      .select("id, thread_id, role, content, created_at")
-      .eq("user_id", userId)
-      .ilike("content", `%${term}%`)
-      .order("created_at", { ascending: false })
-      .limit(40);
+    if (!term) return { threads: [], messages: [] };
+    const [{ data: threads }, { data: rows, error }] = await Promise.all([
+      supabase
+        .from("threads")
+        .select("id, title, updated_at")
+        .eq("user_id", userId)
+        .ilike("title", `%${term}%`)
+        .order("updated_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("messages")
+        .select("id, thread_id, role, content, created_at")
+        .eq("user_id", userId)
+        .ilike("content", `%${term}%`)
+        .order("created_at", { ascending: false })
+        .limit(40),
+    ]);
     if (error) {
       console.error("[searchMessages] DB error:", error);
       throw new Error("Search failed. Please try again.");
     }
-    return (rows ?? []) as Array<{
-      id: string;
-      thread_id: string;
-      role: string;
-      content: string;
-      created_at: string;
-    }>;
+    return {
+      threads: (threads ?? []) as DBThread[],
+      messages: (rows ?? []) as Array<{
+        id: string;
+        thread_id: string;
+        role: string;
+        content: string;
+        created_at: string;
+      }>,
+    };
   });
 
 export const editMessage = createServerFn({ method: "POST" })
@@ -729,6 +189,90 @@ export const editMessage = createServerFn({ method: "POST" })
       throw new Error("Could not update the message. Please try again.");
     }
     return { ok: true };
+  });
+
+export const setFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string; rating: number }) =>
+    z.object({ messageId: z.string().uuid(), rating: z.number().int().min(-1).max(1) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    if (data.rating === 0) {
+      await supabase.from("message_feedback").delete().eq("user_id", userId).eq("message_id", data.messageId);
+      return { ok: true, rating: 0 };
+    }
+    await supabase.from("message_feedback").delete().eq("user_id", userId).eq("message_id", data.messageId);
+    const { error } = await supabase
+      .from("message_feedback")
+      .insert({ user_id: userId, message_id: data.messageId, rating: data.rating });
+    if (error) {
+      console.error("[setFeedback] DB error:", error);
+      throw new Error("Could not save your feedback.");
+    }
+    return { ok: true, rating: data.rating };
+  });
+
+export const listFeedback = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { threadId: string }) => z.object({ threadId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: msgs } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("thread_id", data.threadId);
+    const ids = (msgs ?? []).map((m: any) => m.id);
+    if (!ids.length) return {} as Record<string, number>;
+    const { data: rows } = await supabase
+      .from("message_feedback")
+      .select("message_id, rating")
+      .eq("user_id", userId)
+      .in("message_id", ids);
+    const out: Record<string, number> = {};
+    for (const r of rows ?? []) out[r.message_id] = r.rating;
+    return out;
+  });
+
+export const togglePin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string; threadId: string }) =>
+    z.object({ messageId: z.string().uuid(), threadId: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: existing } = await supabase
+      .from("pinned_messages")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("message_id", data.messageId)
+      .maybeSingle();
+    if (existing) {
+      await supabase.from("pinned_messages").delete().eq("id", existing.id);
+      return { ok: true, pinned: false };
+    }
+    const { error } = await supabase
+      .from("pinned_messages")
+      .insert({ user_id: userId, message_id: data.messageId, thread_id: data.threadId });
+    if (error) {
+      console.error("[togglePin] DB error:", error);
+      throw new Error("Could not pin this message.");
+    }
+    return { ok: true, pinned: true };
+  });
+
+export const listPinned = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { threadId: string }) => z.object({ threadId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: rows } = await supabase
+      .from("pinned_messages")
+      .select("message_id")
+      .eq("user_id", userId)
+      .eq("thread_id", data.threadId);
+    return (rows ?? []).map((r: any) => r.message_id as string);
   });
 
 export const saveMusic = createServerFn({ method: "POST" })
@@ -783,11 +327,16 @@ export const listMusic = createServerFn({ method: "GET" })
       const { data: signed } = await supabase.storage
         .from("generated-audio")
         .createSignedUrl(r.audio_path, 60 * 60 * 6);
-      out.push({ id: r.id, title: r.title, prompt: r.prompt, url: signed?.signedUrl ?? null, created_at: r.created_at });
+      out.push({
+        id: r.id,
+        title: r.title,
+        prompt: r.prompt,
+        url: signed?.signedUrl ?? null,
+        created_at: r.created_at,
+      });
     }
     return out;
   });
-
 
 export const createThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -800,9 +349,29 @@ export const createThread = createServerFn({ method: "POST" })
       .single();
     if (error) {
       console.error("[createThread] DB error:", error);
-      throw new Error("Failed to create thread. Please try again.");
+      throw new Error("Failed to create chat. Please try again.");
     }
     return data as DBThread;
+  });
+
+export const renameThread = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { threadId: string; title: string }) =>
+    z.object({ threadId: z.string().uuid(), title: z.string().min(1).max(80) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const title = data.title.trim().replace(/\s+/g, " ");
+    const { error } = await supabase
+      .from("threads")
+      .update({ title })
+      .eq("user_id", userId)
+      .eq("id", data.threadId);
+    if (error) {
+      console.error("[renameThread] DB error:", error);
+      throw new Error("Could not rename this chat.");
+    }
+    return { ok: true, title };
   });
 
 export const deleteThread = createServerFn({ method: "POST" })
@@ -813,32 +382,6 @@ export const deleteThread = createServerFn({ method: "POST" })
     await supabase.from("threads").delete().eq("user_id", userId).eq("id", data.threadId);
     return { ok: true };
   });
-
-function deriveTitle(text: string) {
-  const t = text.trim().replace(/\s+/g, " ");
-  return t.length > 48 ? t.slice(0, 48) + "…" : t || "New chat";
-}
-
-// Short, human-readable chat title derived from the first exchange.
-async function smartTitle(userText: string, assistantText: string): Promise<string> {
-  try {
-    const raw = await generateText([
-      {
-        role: "user",
-        content: `Write a short chat title (3 to 6 words, Title Case, no quotes, no punctuation at the end) that summarises this conversation.\n\nUser: ${userText.slice(0, 800)}\n\nAssistant: ${assistantText.slice(0, 400)}\n\nReply with the title only.`,
-      },
-    ]);
-    const cleaned = raw
-      .replace(/["'`*#]/g, "")
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean)[0];
-    if (cleaned && cleaned.length >= 3 && cleaned.length <= 60) return cleaned.replace(/[.:;,]+$/, "");
-  } catch (e) {
-    console.error("[title] failed:", (e as Error).message);
-  }
-  return deriveTitle(userText);
-}
 
 export const sendMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -857,39 +400,41 @@ export const sendMessage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
 
-    // ensure thread belongs to user
     const { data: thread } = await supabase
       .from("threads")
       .select("id, title")
       .eq("id", data.threadId)
       .eq("user_id", userId)
       .maybeSingle();
-    if (!thread) throw new Error("Thread not found");
+    if (!thread) throw new Error("Chat not found");
 
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
     const isAdmin = await isAdminUser(supabase, userId, profile.email);
-    const watermark = profile.plan !== "premium" && !isAdmin;
 
     const hasImages = !!data.images && data.images.length > 0;
-    const wantsEdit = hasImages && detectImageEdit(data.content);
-    const music = hasImages ? null : detectMusicRequest(data.content);
-    const imagePrompt = hasImages || music ? null : detectImageRequest(data.content);
-    const isImage = !!imagePrompt || wantsEdit;
-    const isMedia = isImage || !!music;
+    const route = await routeRequest(data.content, hasImages);
+    const isImage = route.mode === "IMAGE_GEN" || route.mode === "IMAGE_EDIT";
+    const isMusic = route.mode === "MUSIC_SHORT" || route.mode === "MUSIC_SONG";
+    const isMedia = isImage || isMusic;
 
     if (isMedia && !isAdmin && usage.image_count >= usage.image_limit) {
       return {
         ok: false,
         kind: "limit" as const,
-        message: music ? "Music limit reached. Resets every 5 hours." : "Image limit reached. Resets every 5 hours.",
+        message: isMusic
+          ? "Music limit reached. It resets every 5 hours."
+          : "Image limit reached. It resets every 5 hours.",
       };
     }
     if (!isMedia && !isAdmin && usage.text_count >= usage.text_limit) {
-      return { ok: false, kind: "limit" as const, message: "Text limit reached. Will reset automatically." };
+      return { ok: false, kind: "limit" as const, message: "Text limit reached. It will reset automatically." };
     }
 
-    // Insert user message
+    // Free accounts get their first few images clean, then watermarked.
+    const watermark =
+      profile.plan !== "premium" && !isAdmin && usage.image_count >= FREE_CLEAN_IMAGES;
+
     await supabase.from("messages").insert({
       thread_id: data.threadId,
       user_id: userId,
@@ -928,10 +473,11 @@ export const sendMessage = createServerFn({ method: "POST" })
       await adm.from("usage").update({ text_count: usage.text_count + 1 }).eq("user_id", userId);
     }
 
-    if (music) {
+    if (isMusic) {
       try {
-        if (!isAdmin) await sleep(FREE_IMAGE_DELAY_MS);
-        const { buf, mime } = await novaMusic(music.prompt, music.tier);
+        await mediaDelay(isAdmin);
+        const tier = route.mode === "MUSIC_SONG" ? "song" : "short";
+        const { buf, mime } = await nizaMusic(route.prompt, tier);
         const ext = mime.includes("mpeg") ? "mp3" : mime.includes("ogg") ? "ogg" : "wav";
         const path = `${userId}/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage
@@ -943,15 +489,15 @@ export const sendMessage = createServerFn({ method: "POST" })
           .from("generated-audio")
           .createSignedUrl(path, 60 * 60 * 6);
         signedAudio = signed?.signedUrl ?? null;
-        assistantContent = music.tier === "song" ? "Here's your song:" : "Here's your track:";
+        assistantContent = tier === "song" ? "Here's your song:" : "Here's your track:";
         if (!isAdmin) await bumpImage();
       } catch (e) {
         console.error("music gen failed:", e);
         assistantContent = "Sorry, music generation is unavailable right now. Please try again later.";
       }
-    } else if (wantsEdit) {
+    } else if (route.mode === "IMAGE_EDIT") {
       try {
-        if (!isAdmin) await sleep(FREE_IMAGE_DELAY_MS);
+        await mediaDelay(isAdmin);
         await storeImage(await editImage(data.content, data.images!));
         assistantContent = "Here's your edited image:";
         if (!isAdmin) await bumpImage();
@@ -959,23 +505,23 @@ export const sendMessage = createServerFn({ method: "POST" })
         console.error("image edit failed:", e);
         assistantContent = "Sorry, image editing is unavailable right now. Please try again later.";
       }
-    } else if (imagePrompt) {
+    } else if (route.mode === "IMAGE_GEN") {
       try {
-        if (!isAdmin) await sleep(FREE_IMAGE_DELAY_MS);
-        await storeImage(await generateImage(imagePrompt));
+        await mediaDelay(isAdmin);
+        await storeImage(await generateImage(route.prompt));
         assistantContent = "Here's your image:";
         if (!isAdmin) await bumpImage();
       } catch (e) {
         console.error("image gen failed:", e);
         assistantContent = "Sorry, image generation is unavailable right now. Please try again later.";
       }
-    } else if (hasImages) {
+    } else if (route.mode === "VISION") {
       try {
-        assistantContent = await novaVisionAnalyze(data.content, data.images!);
+        assistantContent = await nizaVisionAnalyze(data.content, data.images!);
         if (!isAdmin) await bumpText();
       } catch (e) {
         console.error("vision failed:", e);
-        assistantContent = "Sorry, I couldn't analyze the image right now. Please try again.";
+        assistantContent = "Sorry, I couldn't analyse that image right now. Please try again.";
       }
     } else {
       const { data: history } = await supabase
@@ -992,7 +538,7 @@ export const sendMessage = createServerFn({ method: "POST" })
         if (!isAdmin) await bumpText();
       } catch (e) {
         console.error("text gen failed:", e);
-        assistantContent = "AI is currently unavailable. Please try again.";
+        assistantContent = "Niza AI is currently unavailable. Please try again.";
       }
     }
 
@@ -1006,11 +552,11 @@ export const sendMessage = createServerFn({ method: "POST" })
         image_url: imagePath,
         audio_url: audioPath,
         watermarked,
+        media_prompt: isMedia ? route.prompt : null,
       })
       .select("id, thread_id, role, content, image_url, audio_url, watermarked, edited, created_at")
       .single();
 
-    // Smart title once the first exchange completes.
     let newTitle: string | null = null;
     if (thread.title === "New chat") {
       newTitle = await smartTitle(data.content, assistantContent);
@@ -1021,6 +567,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       ok: true,
       kind: "message" as const,
       title: newTitle,
+      mode: route.mode,
       assistant: {
         ...(inserted as any),
         image_url: signedImage ?? (inserted as any)?.image_url ?? null,
@@ -1029,18 +576,14 @@ export const sendMessage = createServerFn({ method: "POST" })
     };
   });
 
-
 export const regenerateImage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { messageId: string }) =>
-    z.object({ messageId: z.string().uuid() }).parse(d),
-  )
+  .inputValidator((d: { messageId: string }) => z.object({ messageId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
-    // Find the assistant message and the prior user message (the prompt)
     const { data: asst } = await supabase
       .from("messages")
-      .select("id, thread_id, created_at, image_url")
+      .select("id, thread_id, created_at, image_url, media_prompt")
       .eq("id", data.messageId)
       .eq("user_id", userId)
       .maybeSingle();
@@ -1055,16 +598,19 @@ export const regenerateImage = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (!prev) throw new Error("No prompt found");
+    const prompt = asst.media_prompt || prev?.content;
+    if (!prompt) throw new Error("No prompt found");
 
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
-    if (usage.image_count >= usage.image_limit) {
+    const isAdmin = await isAdminUser(supabase, userId, profile.email);
+    if (!isAdmin && usage.image_count >= usage.image_limit) {
       return { ok: false, kind: "limit" as const, message: "Image limit reached." };
     }
+    const watermark = profile.plan !== "premium" && !isAdmin && usage.image_count >= FREE_CLEAN_IMAGES;
 
     try {
-      const buf = await generateImage(prev.content);
+      const buf = await generateImage(prompt);
       const path = `${userId}/${crypto.randomUUID()}.png`;
       const { error: upErr } = await supabase.storage
         .from("generated-images")
@@ -1075,14 +621,18 @@ export const regenerateImage = createServerFn({ method: "POST" })
         .createSignedUrl(path, 60 * 60 * 6);
       await supabase
         .from("messages")
-        .update({ image_url: path, content: "Here's your image:" })
+        .update({ image_url: path, content: "Here's your image:", watermarked: watermark })
         .eq("id", data.messageId);
-      const _admin4 = await adminClient();
-      await _admin4
-        .from("usage")
-        .update({ image_count: usage.image_count + 1 })
-        .eq("user_id", userId);
-      return { ok: true, kind: "message" as const, image_url: signed?.signedUrl ?? null };
+      if (!isAdmin) {
+        const adm = await adminClient();
+        await adm.from("usage").update({ image_count: usage.image_count + 1 }).eq("user_id", userId);
+      }
+      return {
+        ok: true,
+        kind: "message" as const,
+        image_url: signed?.signedUrl ?? null,
+        watermarked: watermark,
+      };
     } catch (e) {
       console.error("regen failed:", e);
       return { ok: false, kind: "error" as const, message: "Image generation failed. Please try again later." };
@@ -1091,9 +641,7 @@ export const regenerateImage = createServerFn({ method: "POST" })
 
 export const regenerateText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { messageId: string }) =>
-    z.object({ messageId: z.string().uuid() }).parse(d),
-  )
+  .inputValidator((d: { messageId: string }) => z.object({ messageId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context as any;
     const { data: asst } = await supabase
@@ -1107,7 +655,8 @@ export const regenerateText = createServerFn({ method: "POST" })
 
     const profile = await loadProfile(supabase, userId);
     const usage = await loadOrResetUsage(supabase, userId, profile.plan);
-    if (usage.text_count >= usage.text_limit) {
+    const isAdmin = await isAdminUser(supabase, userId, profile.email);
+    if (!isAdmin && usage.text_count >= usage.text_limit) {
       return { ok: false, kind: "limit" as const, message: "Text limit reached." };
     }
     const { data: history } = await supabase
@@ -1123,8 +672,10 @@ export const regenerateText = createServerFn({ method: "POST" })
         (history ?? []).map((m: any) => ({ role: m.role, content: m.content })),
       );
       await supabase.from("messages").update({ content: text }).eq("id", data.messageId);
-      const _admin5 = await adminClient();
-      await _admin5.from("usage").update({ text_count: usage.text_count + 1 }).eq("user_id", userId);
+      if (!isAdmin) {
+        const adm = await adminClient();
+        await adm.from("usage").update({ text_count: usage.text_count + 1 }).eq("user_id", userId);
+      }
       return { ok: true, kind: "message" as const, content: text };
     } catch (e) {
       console.error("regen text failed:", e);
@@ -1132,3 +683,66 @@ export const regenerateText = createServerFn({ method: "POST" })
     }
   });
 
+export const generateMusic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { prompt: string; tier?: "short" | "song" }) =>
+    z.object({ prompt: z.string().min(2).max(2000), tier: z.enum(["short", "song"]).optional() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const profile = await loadProfile(supabase, userId);
+    const usage = await loadOrResetUsage(supabase, userId, profile.plan);
+    const isAdmin = await isAdminUser(supabase, userId, profile.email);
+    if (!isAdmin && usage.image_count >= usage.image_limit) {
+      return { ok: false, kind: "limit" as const, message: "Music limit reached. It resets every 5 hours." };
+    }
+    const route = await routeRequest(data.prompt, false);
+    const tier: "short" | "song" =
+      data.tier ?? (route.mode === "MUSIC_SONG" ? "song" : "short");
+    try {
+      await mediaDelay(isAdmin);
+      const { buf, mime } = await nizaMusic(data.prompt, tier);
+      const ext = mime.includes("mpeg") ? "mp3" : mime.includes("ogg") ? "ogg" : "wav";
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("generated-audio")
+        .upload(path, new Uint8Array(buf), { contentType: mime || "audio/wav" });
+      if (upErr) throw upErr;
+      const { data: signed } = await supabase.storage
+        .from("generated-audio")
+        .createSignedUrl(path, 60 * 60 * 6);
+      const title = deriveTitle(data.prompt);
+      const { data: row } = await supabase
+        .from("music_history")
+        .insert({ user_id: userId, title, prompt: data.prompt, audio_path: path })
+        .select("id, created_at")
+        .single();
+      if (!isAdmin) {
+        const adm = await adminClient();
+        await adm.from("usage").update({ image_count: usage.image_count + 1 }).eq("user_id", userId);
+      }
+      return {
+        ok: true,
+        kind: "track" as const,
+        track: {
+          id: row?.id ?? crypto.randomUUID(),
+          title,
+          prompt: data.prompt,
+          url: signed?.signedUrl ?? null,
+          created_at: row?.created_at ?? new Date().toISOString(),
+        },
+      };
+    } catch (e) {
+      console.error("music gen failed:", e);
+      return { ok: false, kind: "error" as const, message: "Music generation is unavailable right now." };
+    }
+  });
+
+export const deleteMusic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    await supabase.from("music_history").delete().eq("user_id", userId).eq("id", data.id);
+    return { ok: true };
+  });

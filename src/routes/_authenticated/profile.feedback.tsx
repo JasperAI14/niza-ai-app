@@ -10,10 +10,10 @@ import { PageShell, Card } from "@/components/PageShell";
 export const Route = createFileRoute("/_authenticated/profile/feedback")({
   head: () => ({
     meta: [
-      { title: "Send Feedback — NovaMind AI" },
-      { name: "description", content: "Rate NovaMind AI and tell our Support Team what you think." },
-      { property: "og:title", content: "Send Feedback — NovaMind AI" },
-      { property: "og:description", content: "Rate NovaMind AI and tell our Support Team what you think." },
+      { title: "Send Feedback — Niza AI" },
+      { name: "description", content: "Rate Niza AI and tell our Support Team what you think." },
+      { property: "og:title", content: "Send Feedback — Niza AI" },
+      { property: "og:description", content: "Rate Niza AI and tell our Support Team what you think." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -55,12 +55,12 @@ function Feedback() {
   }
 
   return (
-    <PageShell title="Send Feedback" subtitle="Your rating helps NovaMind AI improve">
+    <PageShell title="Send Feedback" subtitle="Your rating helps Niza AI improve">
       <div className="space-y-5">
         <Card>
           <form onSubmit={submit} className="space-y-4">
             <div>
-              <div className="mb-2 text-sm font-medium">How would you rate NovaMind AI?</div>
+              <div className="mb-2 text-sm font-medium">How would you rate Niza AI?</div>
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button
@@ -125,7 +125,7 @@ function Feedback() {
                 <p className="text-sm">{r.body}</p>
                 {r.ai_reply && (
                   <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-                    <div className="mb-1 text-xs font-semibold text-foreground">NovaMind AI Support</div>
+                    <div className="mb-1 text-xs font-semibold text-foreground">Niza AI Support</div>
                     {r.ai_reply}
                   </div>
                 )}

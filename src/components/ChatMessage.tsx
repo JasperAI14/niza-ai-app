@@ -166,7 +166,7 @@ export function ChatMessage({
                   <img src={message.image_url} alt="Generated" className="block w-full" loading="lazy" />
                   {message.watermarked && (
                     <span className="pointer-events-none absolute bottom-2 right-2.5 text-[11px] font-semibold text-white/75 drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]">
-                      NovaMind AI
+                      Niza AI
                     </span>
                   )}
                   <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-black/45 p-1 opacity-0 transition group-hover:opacity-100">

@@ -1,4 +1,4 @@
-// NovaMind AI — background sync + push notification support.
+// Niza AI — background sync + push notification support.
 // Loaded via importScripts from the Workbox-generated /sw.js.
 
 // ---- Push notifications ----
@@ -7,15 +7,15 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "NovaMind AI", body: event.data ? event.data.text() : "" };
+    data = { title: "Niza AI", body: event.data ? event.data.text() : "" };
   }
-  const title = data.title || "NovaMind AI";
+  const title = data.title || "Niza AI";
   const options = {
     body: data.body || "",
     icon: data.icon || "/icon-192.png",
     badge: data.badge || "/icon-192.png",
     data: { url: data.url || "/" },
-    tag: data.tag || "novamind-push",
+    tag: data.tag || "niza-push",
     renotify: true,
   };
   event.waitUntil(self.registration.showNotification(title, options));
@@ -39,9 +39,9 @@ self.addEventListener("notificationclick", (event) => {
 });
 
 // ---- Background sync ----
-// Pages can request a sync via: reg.sync.register('novamind-sync')
+// Pages can request a sync via: reg.sync.register('niza-sync')
 self.addEventListener("sync", (event) => {
-  if (event.tag === "novamind-sync") {
+  if (event.tag === "niza-sync") {
     event.waitUntil(
       (async () => {
         const clientsArr = await self.clients.matchAll({ includeUncontrolled: true });
@@ -53,7 +53,7 @@ self.addEventListener("sync", (event) => {
 
 // Periodic background sync (Android Chrome, with permission).
 self.addEventListener("periodicsync", (event) => {
-  if (event.tag === "novamind-refresh") {
+  if (event.tag === "niza-refresh") {
     event.waitUntil(
       (async () => {
         const clientsArr = await self.clients.matchAll({ includeUncontrolled: true });
