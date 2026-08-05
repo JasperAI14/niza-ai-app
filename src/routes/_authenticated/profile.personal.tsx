@@ -12,10 +12,10 @@ import { PageShell, Card } from "@/components/PageShell";
 export const Route = createFileRoute("/_authenticated/profile/personal")({
   head: () => ({
     meta: [
-      { title: "Personal Information — Niza AI" },
-      { name: "description", content: "Update your Niza AI profile picture, display name and username." },
-      { property: "og:title", content: "Personal Information — Niza AI" },
-      { property: "og:description", content: "Update your Niza AI profile picture, display name and username." },
+      { title: "Personal Information — Niza Prime AI" },
+      { name: "description", content: "Update your Niza Prime AI profile picture, display name and username." },
+      { property: "og:title", content: "Personal Information — Niza Prime AI" },
+      { property: "og:description", content: "Update your Niza Prime AI profile picture, display name and username." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -181,7 +181,7 @@ function PersonalInfo() {
                 placeholder="How should we call you?"
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="mt-1 text-xs text-muted-foreground">Shown across Niza AI. 2–40 characters.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Shown across Niza Prime AI. 2–40 characters.</p>
             </div>
 
             <div>

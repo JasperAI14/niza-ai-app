@@ -1,4 +1,4 @@
-// Niza AI theme system — persisted in localStorage, applied to <html>.
+// Niza Prime AI theme system — persisted in localStorage, applied to <html>.
 
 export type ThemeMode = "system" | "dark" | "light";
 export type AccentKey = "violet" | "cyan" | "emerald" | "amber" | "rose";

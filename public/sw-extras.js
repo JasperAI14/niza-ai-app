@@ -1,4 +1,4 @@
-// Niza AI — background sync + push notification support.
+// Niza Prime AI — background sync + push notification support.
 // Loaded via importScripts from the Workbox-generated /sw.js.
 
 // ---- Push notifications ----
@@ -7,9 +7,9 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "Niza AI", body: event.data ? event.data.text() : "" };
+    data = { title: "Niza Prime AI", body: event.data ? event.data.text() : "" };
   }
-  const title = data.title || "Niza AI";
+  const title = data.title || "Niza Prime AI";
   const options = {
     body: data.body || "",
     icon: data.icon || "/icon-192.png",

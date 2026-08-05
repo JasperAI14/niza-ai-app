@@ -121,7 +121,7 @@ export function ImageViewer({
     ctx.shadowColor = "rgba(0,0,0,0.45)";
     ctx.shadowBlur = size * 0.4;
     ctx.fillStyle = "rgba(255,255,255,0.78)";
-    ctx.fillText("Niza AI", w - pad, h - pad);
+    ctx.fillText("Niza Prime AI", w - pad, h - pad);
     ctx.restore();
   }
 

@@ -10,8 +10,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — Niza AI" },
-      { name: "description", content: "Sign in to Niza AI with Google, email, or a magic link." },
+      { title: "Sign in — Niza Prime AI" },
+      { name: "description", content: "Sign in to Niza Prime AI with Google, email, or a magic link." },
     ],
   }),
   ssr: false,
@@ -160,7 +160,7 @@ function AuthPage() {
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-xl font-bold">
             N
           </div>
-          <h1 className="text-2xl font-bold">Niza AI</h1>
+          <h1 className="text-2xl font-bold">Niza Prime AI</h1>
           <p className="mt-1 text-sm text-muted-foreground">Chat, code, and create images — all in one.</p>
         </div>
 

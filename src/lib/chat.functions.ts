@@ -538,7 +538,7 @@ export const sendMessage = createServerFn({ method: "POST" })
         if (!isAdmin) await bumpText();
       } catch (e) {
         console.error("text gen failed:", e);
-        assistantContent = "Niza AI is currently unavailable. Please try again.";
+        assistantContent = "Niza Prime AI is currently unavailable. Please try again.";
       }
     }
 

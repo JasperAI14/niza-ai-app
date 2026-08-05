@@ -504,7 +504,7 @@ export function NizaApp() {
         <div className="flex items-center justify-between border-b border-border p-3">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">N</div>
-            <span className="font-semibold">Niza AI</span>
+            <span className="font-semibold">Niza Prime AI</span>
           </div>
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${plan === "premium" ? "bg-amber-500/20 text-amber-500" : "bg-muted text-muted-foreground"}`}>
             {plan.toUpperCase()}
@@ -601,7 +601,7 @@ export function NizaApp() {
           <button onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu className="h-5 w-5" />
           </button>
-          <span className="font-semibold">Niza AI</span>
+          <span className="font-semibold">Niza Prime AI</span>
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
@@ -711,7 +711,7 @@ export function NizaApp() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Ask Niza AI…"
+                placeholder="Ask Niza Prime AI…"
                 rows={1}
                 className="max-h-60 flex-1 resize-none bg-transparent px-2 py-2 text-[15px] outline-none placeholder:text-muted-foreground"
                 disabled={sendMut.isPending || inputBlocked}
@@ -751,7 +751,7 @@ export function NizaApp() {
             )}
           </div>
           <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground">
-            Niza AI can make mistakes. Verify important information.
+            Niza Prime AI can make mistakes. Verify important information.
           </p>
         </div>
       </main>
