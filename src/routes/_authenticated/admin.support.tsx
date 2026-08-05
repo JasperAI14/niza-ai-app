@@ -9,10 +9,10 @@ import { PageShell, Card } from "@/components/PageShell";
 export const Route = createFileRoute("/_authenticated/admin/support")({
   head: () => ({
     meta: [
-      { title: "Support Dashboard — Niza AI" },
-      { name: "description", content: "Administrator view of Niza AI support requests." },
-      { property: "og:title", content: "Support Dashboard — Niza AI" },
-      { property: "og:description", content: "Administrator view of Niza AI support requests." },
+      { title: "Support Dashboard — Niza Prime AI" },
+      { name: "description", content: "Administrator view of Niza Prime AI support requests." },
+      { property: "og:title", content: "Support Dashboard — Niza Prime AI" },
+      { property: "og:description", content: "Administrator view of Niza Prime AI support requests." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],

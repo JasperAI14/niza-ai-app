@@ -1,4 +1,4 @@
-// Server-only engine for Niza AI: provider access, the intelligent AI Router,
+// Server-only engine for Niza Prime AI: provider access, the intelligent AI Router,
 // media generation and persistence helpers.
 //
 // Internal engine names are never exposed to end users:
@@ -234,7 +234,7 @@ async function callOpenRouterText(messages: ChatMsg[]): Promise<string> {
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      "X-Title": "Niza AI",
+      "X-Title": "Niza Prime AI",
     },
     body: JSON.stringify({
       model: "meta-llama/llama-3.3-70b-instruct:free",

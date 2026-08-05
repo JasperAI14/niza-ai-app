@@ -53,7 +53,7 @@ export function UpgradeInlineBanner({ open, reason, onClose }: Props) {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-foreground">{label}</div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Upgrade to <span className="font-medium text-foreground">Niza AI Premium</span> for unlimited
+            Upgrade to <span className="font-medium text-foreground">Niza Prime AI Premium</span> for unlimited
             conversations, higher image limits, and priority AI responses. ₦5,000/month.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">

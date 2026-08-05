@@ -4,10 +4,10 @@ import { PageShell, Card } from "@/components/PageShell";
 export const Route = createFileRoute("/_authenticated/profile/privacy")({
   head: () => ({
     meta: [
-      { title: "Privacy Policy — Niza AI" },
-      { name: "description", content: "How Niza AI collects, uses and protects your information." },
-      { property: "og:title", content: "Privacy Policy — Niza AI" },
-      { property: "og:description", content: "How Niza AI collects, uses and protects your information." },
+      { title: "Privacy Policy — Niza Prime AI" },
+      { name: "description", content: "How Niza Prime AI collects, uses and protects your information." },
+      { property: "og:title", content: "Privacy Policy — Niza Prime AI" },
+      { property: "og:description", content: "How Niza Prime AI collects, uses and protects your information." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -30,7 +30,7 @@ function Privacy() {
       <Card className="space-y-6">
         <Section title="Information we collect">
           <p>
-            When you use Niza AI we collect the email address linked to your sign-in method, the profile
+            When you use Niza Prime AI we collect the email address linked to your sign-in method, the profile
             details you choose to add (display name, username and profile picture), and the content of your
             conversations, including the pictures, documents and audio you create or upload.
           </p>
@@ -38,7 +38,7 @@ function Privacy() {
         <Section title="How your information is used">
           <p>
             Your information is used to sign you in, keep your conversations available on your account, apply your
-            plan and usage allowance, answer your questions, and improve the reliability of Niza AI. Support
+            plan and usage allowance, answer your questions, and improve the reliability of Niza Prime AI. Support
             messages and feedback are used only to respond to you and to fix problems.
           </p>
         </Section>
@@ -58,7 +58,7 @@ function Privacy() {
         </Section>
         <Section title="Sharing">
           <p>
-            Niza AI does not sell your information and does not share your conversations with other users.
+            Niza Prime AI does not sell your information and does not share your conversations with other users.
             Information is shared only where it is needed to run the service, such as secure payment handling for
             Premium subscriptions, or where the law requires it.
           </p>
@@ -70,11 +70,11 @@ function Privacy() {
           </p>
         </Section>
         <Section title="Children">
-          <p>Niza AI is intended for people aged 13 and above.</p>
+          <p>Niza Prime AI is intended for people aged 13 and above.</p>
         </Section>
         <Section title="Changes to this policy">
           <p>
-            If this policy changes we will update this page and the date above. Continuing to use Niza AI after
+            If this policy changes we will update this page and the date above. Continuing to use Niza Prime AI after
             a change means you accept the updated policy.
           </p>
         </Section>

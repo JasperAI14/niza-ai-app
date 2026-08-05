@@ -6,8 +6,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
     meta: [
-      { title: "Reset password — Niza AI" },
-      { name: "description", content: "Set a new password for your Niza AI account." },
+      { title: "Reset password — Niza Prime AI" },
+      { name: "description", content: "Set a new password for your Niza Prime AI account." },
     ],
   }),
   ssr: false,

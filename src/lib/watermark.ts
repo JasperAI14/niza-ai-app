@@ -1,7 +1,7 @@
 // Client-side watermarking for free-plan generated images.
 // Free users see the mark in-app (CSS overlay) and get it baked into downloads.
 
-const MARK = "Niza AI";
+const MARK = "Niza Prime AI";
 
 export async function bakeWatermark(src: string): Promise<Blob> {
   const img = await loadImage(src);
