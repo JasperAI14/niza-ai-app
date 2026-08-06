@@ -17,6 +17,7 @@ import {
   nizaVisionAnalyze,
   routeRequest,
   smartTitle,
+  webSearchAnswer,
 } from "./chat.server";
 
 // ---------- types (erased at build time) ----------
