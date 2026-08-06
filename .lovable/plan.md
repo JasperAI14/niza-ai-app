@@ -1,103 +1,184 @@
-# Niza Prime AI — Major Update Implementation Plan (revised)
+# Niza Prime AI — Detailed Implementation Plan
 
-Follows the 13 Golden Rules: fix and extend what exists, never redesign working features.
+Written against the project as it exists today. Golden Rules apply throughout: fix what is broken or missing, never redesign working features, never restart finished work, group related changes, verify after each group.
 
-## Current state (verified)
+---
 
-- Router: `routeRequest` in `src/lib/chat.server.ts` — rules-first CHAT / CODE / IMAGE_GEN / IMAGE_EDIT / VISION / MUSIC_SHORT / MUSIC_SONG, model fallback for ambiguous wording. No clarification step, no web search, no memory input.
-- `sendMessage` (`src/lib/chat.functions.ts`) owns the pipeline: limits, watermark (4 free clean images), storage, usage counters.
-- Smart Copy: `src/lib/artifact.ts` + `CopyCard.tsx`, triggered by length/format heuristics in `src/lib/intent.ts`.
-- Speech-to-text: inline in `NizaApp.tsx`, `SpeechRecognition` with a session token. No waveform, no persistence, no offline queue.
-- Music: `generateMusic` / `saveMusic` / `listMusic` / `deleteMusic`, `music_history` table, `MusicCard.tsx`. No music workspace page.
-- NizaHub: `novahub.server.ts` (HMAC signing + webhook verification), admin page, webhook route that verifies and logs but does not dispatch events.
-- Theme (`theme.ts`), auth page (Google + email + magic link + WebView fallback), action bar, code blocks, share cards, search, long-press all exist in first-pass form.
+## A. What already exists (inspected, do not rebuild)
+
+- `src/lib/chat.server.ts` — provider layer and router. `routeRequest(text, hasImages)` returns one of CHAT / CODE / IMAGE_GEN / IMAGE_EDIT / VISION / MUSIC_SHORT / MUSIC_SONG using regex rules first and a model call only when the wording is ambiguous. Also holds `generateText`, `nizaVisionAnalyze`, `generateImage`, `editImage`, `nizaMusic`, `smartTitle`, `loadProfile`, `loadOrResetUsage`, `isAdminUser`, watermark rule (`FREE_CLEAN_IMAGES = 4`) and the free-tier media delay.
+- `src/lib/chat.functions.ts` — all server functions: `sendMessage`, `regenerateText`, `regenerateImage`, `generateMusic`, `saveMusic`, `listMusic`, `deleteMusic`, `searchMessages`, `editMessage`, `togglePin`, `listPinned`, `setFeedback`, thread create/rename/delete, `getMe`, `submitPromo`.
+- `src/lib/intent.ts` — image, music, edit and reusable-content regexes.
+- `src/lib/artifact.ts` — `looksLikeArtifact`, `parseSegments`, `analyseMessage`, `artifactExtension`.
+- `src/components/` — `NizaApp.tsx` (shell, composer, speech, threads), `ChatMessage.tsx`, `CopyCard.tsx`, `CodeBlock.tsx`, `ImageViewer.tsx`, `MusicCard.tsx`, `UpgradeModal.tsx`.
+- `src/lib/theme.ts` (mode + accent + font scale), `src/lib/i18n.ts` (12 languages), `src/lib/drafts.ts`, `src/lib/share-card.ts`, `src/lib/filename.ts`, `src/lib/watermark.ts`, `src/lib/niza-knowledge.ts`.
+- `src/lib/novahub.server.ts` — signed requests + webhook signature verification; `src/routes/api/public/novahub/webhook.ts` verifies and records but does not act on events.
+- Database: profiles, threads, messages, usage, music_history, reviews, support_requests, notifications, user_roles, app_settings, payment_events, message_feedback, pinned_messages. Buckets: avatars, generated-images, generated-audio, support-uploads (all private).
+
+Nothing in this list is replaced. Every item below is an addition to, or a repair of, that code.
+
+---
 
 ## 1. Router Knowledge Base
 
-A single server-side knowledge base drives every routing decision, replacing scattered regex checks.
+Today the router is a short chain of regexes inside `chat.server.ts`. It will be replaced by a single, readable knowledge base file so every routing rule lives in one place and can be extended without touching the pipeline.
 
-Modes: `CHAT`, `CODE`, `IMAGE_GEN`, `IMAGE_EDIT`, `VISION`, `MUSIC_SHORT`, `MUSIC_SONG`, `WEB_SEARCH`, `CLARIFY`.
+**New file `src/lib/router-kb.ts`** holding, in plain data form:
 
-Decision shape: `{ mode, prompt, confidence, clarify?: { question, options[] }, aspect?, memoryOps? }`.
+- For each mode, a list of trigger phrases, strong verbs, subject nouns, and negative phrases that must block the mode. Example: MUSIC blocks on "write the lyrics only" (that is a text request), IMAGE blocks on "describe the image you already sent".
+- Confidence scoring: an exact trigger phrase scores high, a lone subject noun scores low. The score decides whether the request runs straight away, goes to the model classifier, or goes to clarification.
+- Modes: CHAT, CODE, IMAGE_GEN, IMAGE_EDIT, VISION, MUSIC_SHORT, MUSIC_SONG, WEB_SEARCH, CLARIFY.
 
-Order: deterministic rules → knowledge-base intent match → model classification only when still ambiguous → safe CHAT fallback.
+**Router order** (in `routeRequest`, same function name and call site, extended signature):
+1. Hard rules — an attached image forces IMAGE_EDIT or VISION exactly as today.
+2. Knowledge-base match with confidence score.
+3. Model classification only when the score sits in the middle band (this keeps cost the same as today).
+4. Low score or missing detail → CLARIFY.
+5. Anything else → CHAT (or CODE when code wording is present).
+
+The decision object grows to: mode, prompt, confidence, optional clarification, optional aspect ratio, optional memory operations, optional web-search flag. Existing callers keep working because the extra fields are optional.
 
 ### 1a. Clarification engine
-- Triggers on: ambiguous single words ("cat", "sunset", "logo"), incomplete prompts ("make me one", "do it", "again"), conflicting signals (image + music words together), and missing required detail for media.
-- Behaviour: one short question plus 2–4 tappable option chips. Never more than one clarification round for the same request; if the user answers vaguely again, pick the safest interpretation and proceed.
-- Image-only clarification: for image requests, only ask when the subject or style is genuinely unclear. A clear description generates immediately — never ask for confirmation of an already-complete image prompt. Clarification never consumes image quota.
-- Chips render in the message and, when tapped, resend the resolved intent so the user never retypes.
+
+- **Fires on:** a bare single word or two ("cat", "sunset", "logo", "song"); an incomplete instruction ("make me one", "do it", "again", "another"); two conflicting intents in one message ("make a song poster"); or a media request missing the one detail needed to produce anything sensible.
+- **Never fires on:** a complete image description, a complete music description, or any normal conversational message. If the user described the picture, it is generated — no confirmation step.
+- **Wording:** the question is generated fresh each time and phrased naturally, so it never reads like a template. It stays to one short sentence and is followed by 2–4 tappable chips (for a bare "cat": *Picture of a cat*, *Facts about cats*, *A story about a cat*). Tapping a chip resends the resolved request; the user never retypes.
+- **One round only.** If the follow-up is still vague, Niza picks the most likely reading, says what it is doing in half a sentence, and proceeds.
+- **No cost:** a clarification turn does not consume text or image quota and does not count against limits.
 
 ### 1b. Hidden memory
-- New `user_memory` table: `user_id`, `key`, `value`, `kind`, `source_message_id`, `updated_at`; RLS owner-only, explicit GRANTs to `authenticated` and `service_role`.
-- Retrieval: on every request, a compact capped memory block is injected into the system prompt. Never displayed in chat, never mentioned by the assistant.
-- Update rules: store durable facts only (name, preferred language, tone, recurring projects, stated preferences). Overwrite by key, prune stale entries.
-- Hard exclusions — never stored, in memory or logs: passwords, API keys, tokens, secrets, OTP codes, card/bank details, ID numbers, addresses, or anything the user marks private. A server-side redaction filter runs before any write, and matching content is dropped silently.
-- User control: view and clear memory from Profile → Personal Information.
 
-### 1c. Topic continuation vs switch
-- Continuation signals (pronouns, "and", "also", "the other one", follow-up questions) keep full context.
-- Switch signals (new named subject with no referential link) drop stale context from the prompt window, keep the thread, and re-derive the title.
-- Conservative threshold: when unsure, keep context.
+- **New table `user_memory`**: user_id, key, value, kind, source_message_id, updated_at. Owner-only RLS plus explicit grants (`authenticated`, `service_role`) in the same migration.
+- **Retrieval:** before every generation the user's memory rows are compacted into a short block and appended to the system prompt. It is never shown in the chat, never listed back, and Niza never says it remembers something unless asked directly.
+- **Update:** after a reply, durable facts only are written — the user's name, preferred language, tone preference, profession, recurring projects, stated likes and dislikes. Writing is by key, so a changed fact overwrites the old one; stale rows are pruned.
+- **Never stored, under any circumstance:** passwords, API keys, tokens, secrets, OTP or verification codes, card and bank details, national ID or passport numbers, home addresses, health details, and anything the user says is private or asks to be forgotten. A redaction filter runs before the write; matching content is dropped silently and never logged.
+- **User control:** Profile → Personal Information gains a "What Niza remembers" section listing stored facts with a Clear all button.
+
+### 1c. Topic continuation vs switching
+
+- Continuation is assumed when the message refers back ("it", "that one", "also", "and", "make it bigger", a follow-up question). Full recent context is kept.
+- A switch is detected when a new, unrelated subject appears with no referential link. The older context is dropped from the prompt window so the answer is not polluted, the thread and its history stay intact, and the thread title is re-derived.
+- When the signals are mixed, context is kept. Losing context is worse than carrying a little extra.
 
 ### 1d. Web search routing
-- `WEB_SEARCH` for time-sensitive or factual queries: "latest", "today", "now", news, prices, scores, releases, live events, "who is currently".
-- Runs server-side; answer is summarised with inline source links rendered under the response. Provider names never surfaced.
+
+- WEB_SEARCH is chosen for anything time-sensitive or verifiable: news, "latest", "today", "current", prices, exchange rates, scores, release dates, who currently holds a position, anything with a year in the near past or future.
+- The search runs server-side inside the existing pipeline; results are summarised into a normal answer with a short list of source links below it.
+- No provider, engine or model name is ever shown. If search is unavailable the answer falls back to normal chat with an honest note that it may not be current.
 
 ### 1e. Smart Copy routing
-- The router, not formatting heuristics, decides Smart Copy: activates only for reusable artifacts (code, emails, letters, documents, essays, prompts, structured plans). Ordinary conversation, short answers and explanations never collapse into a card.
-- Card title derived from the artifact; download uses the correct extension.
+
+- The router decides Smart Copy, not the current length heuristics. It activates only for genuinely reusable output: code, emails, letters, cover letters, essays, articles, reports, structured documents, prompts, scripts, plans and lists meant to be reused.
+- Ordinary conversation, explanations, answers to questions and short replies stay as plain chat bubbles no matter how long they are.
+- The card title describes the artifact ("Cover letter", "Python script", "Marketing plan") rather than a generic label, and the download uses the matching file extension via the existing `artifactExtension`.
 
 ### 1f. Emoji-capable responses
-- Responses may use emojis naturally and sparingly where tone fits (greetings, encouragement, lists), and omit them in code, technical, formal or serious contexts. Added to the system prompt style rules, not hardcoded per message.
+
+Niza may use emojis naturally and sparingly where the tone fits — greetings, encouragement, light lists, celebratory replies — and leaves them out of code, technical explanations, formal writing and serious or sensitive topics. This becomes a style rule in the system prompt, not a per-message toggle.
 
 ### 1g. Image aspect ratios
-- Explicit ratio support with exact sizes: square 1:1 (1024×1024), portrait 3:4 (896×1152) and 9:16 (768×1344), landscape 4:3 (1152×896) and 16:9 (1344×768).
-- The router infers ratio from wording ("wallpaper", "phone background", "banner", "poster", "profile picture") and honours explicit requests ("16:9", "vertical"). Default is 1:1 when nothing indicates otherwise.
+
+Supported ratios and exact output sizes:
+
+```text
+1:1   square      1024 x 1024   (default)
+3:4   portrait     896 x 1152
+9:16  tall          768 x 1344
+4:3   landscape    1152 x 896
+16:9  wide         1344 x 768
+```
+
+The router infers the ratio from the request — "wallpaper" and "phone background" give 9:16, "banner", "cover" and "thumbnail" give 16:9, "poster" gives 3:4, "profile picture" and "icon" give 1:1 — and always honours an explicit request such as "16:9", "vertical" or "square". The ratio is passed through `generateImage` to the provider and recorded with the message so regenerate keeps the same shape.
 
 ### 1h. NizaHub knowledge
-- Router and system prompt know what NizaHub is (identity, SSO, subscription and payment platform behind the account), so questions about accounts, subscriptions and sign-in are answered correctly without exposing internal endpoints or secrets.
 
-## 2. Speech-to-text redesign (exact UX)
+The system prompt and knowledge file learn what NizaHub is: the identity, single sign-on, subscription and payment platform behind a Niza Prime AI account. Questions about signing in, account identity, subscription state or payments are answered correctly and pointed at the right screen, without ever naming internal endpoints, providers or secrets.
 
-- Tapping the mic switches the composer into recording mode: the composer lifts above the keyboard area, the normal input is replaced by the recording bar.
-- Recording bar: X (cancel, discards), live waveform driven by the mic analyser, elapsed timer, Stop, and Send.
-- Stop ends capture and drops the transcript into the composer for review and editing. Send is only available after review — nothing is auto-sent.
-- Background persistence: recording continues across brief tab blur/screen-off via keep-alive and auto-restart on `onend`; when the browser forcibly suspends the mic, the bar shows a paused state and auto-resumes on return with no lost text.
-- Offline queue: transcript and any pending send are stored locally when the network drops and flushed automatically when connectivity returns.
-- Session tokens keep duplicate-word protection already in place.
+---
+
+## 2. Speech-to-text redesign (exact behaviour)
+
+Current speech code in `NizaApp.tsx` is a plain start/stop with a session token. It becomes a dedicated recording experience, extracted into `src/components/VoiceRecorder.tsx` plus a `useVoiceRecorder` hook.
+
+1. Tapping the mic switches the composer into recording mode: the composer lifts clear of the keyboard area and the text field is replaced by the recording bar.
+2. The recording bar contains, left to right: an **X** that cancels and discards everything; a **live waveform** driven by the real microphone level; an **elapsed timer** counting up; **Stop**; and **Send**.
+3. **Stop** ends capture and drops the finished transcript into the composer for review and editing. Nothing is ever sent automatically — the user reads it, edits it, and presses Send.
+4. **Background persistence:** recording survives the screen dimming, the tab losing focus and brief app switches. The recogniser is restarted automatically when the browser ends the session early, with the session token preserving what was already transcribed so no words are duplicated or lost. When the browser hard-suspends the microphone, the bar shows a paused state and resumes automatically on return.
+5. **Offline queue:** if the network drops mid-recording, the transcript is kept locally, the bar shows an offline indicator, and any message the user pressed Send on is queued and delivered as soon as connectivity returns.
+6. **Auto-resume:** returning to the app with an unfinished recording restores the bar and the text captured so far rather than starting over.
+7. Existing duplicate-word protection is kept exactly as it is.
+
+---
 
 ## 3. Music workflow
-- Dedicated Music workspace with history, a player that keeps playing while navigating, save/download/delete and regenerate. Automatic intent detection stays; short vs song tier shown on the card.
 
-## 4. Theme redesign
-- Refine the existing token set for contrast and consistency; sweep components for hardcoded colors into tokens. No new theme engine.
+- A dedicated Music workspace route listing generated tracks from `music_history`, with play, pause, seek, save, download, share, regenerate and delete.
+- The player keeps playing while the user navigates between chat and music.
+- Automatic music intent detection in chat stays; the card shows whether the piece is a short instrumental or a full song, along with the prompt and duration.
+- Generation shows an animated in-progress state rather than a frozen bubble.
 
-## 5. Authentication redesign
-- Keep all working providers and the WebView fallback. Polished layout, language selection, clearer error states.
+## 4. Theme
 
-## 6. Response action bars
-- Consistent Copy, Like, Dislike, Regenerate, Share across text, image and music, with type-specific extras (Download/Edit on images, Save on music).
+Refine the existing token system for contrast and consistency across dark and light, and sweep components for hardcoded colours into tokens. No new theme engine, no change to the stored preference key.
+
+## 5. Authentication
+
+Keep every working provider and the in-app-browser fallback. Improve the page itself: cleaner layout, clearer wording, visible language selection, better error and loading states, and a smoother path into Premium.
+
+## 6. Response action bar
+
+One consistent bar under every response: Copy, Like, Dislike, Regenerate, Share — plus Download and Edit on images, and Save on music. Like and Dislike persist through the existing feedback function and show their selected state.
 
 ## 7. Code blocks and live preview
-- Language detection, professional header, copy and download, sandboxed live preview for HTML/CSS/JS, correct mobile wrapping and scroll.
 
-## 8. Sharing system
-- One share entry point for messages, images, music and cards; native share where available, branded share-card image fallback.
+Language detection with a professional header (language label, copy, download, and preview where relevant), correct wrapping and horizontal scroll on mobile, and a sandboxed live preview for HTML, CSS and JavaScript that can be expanded to full screen.
 
-## 9. Search improvements
-- Titles and message content, partial matching, highlighted excerpts, jump-to-message.
+## 8. Sharing
+
+One share entry point used by messages, images, music and copy cards, with the same icon and animation everywhere. It uses the device share sheet where available and falls back to the branded share-card image already implemented in `share-card.ts`.
+
+## 9. Search
+
+Search across thread titles and message content with partial matching, highlighted excerpts in the results, and tapping a result jumping to that exact message in the thread.
 
 ## 10. Long-press menus
-- AI message: Copy, Select text, Share, Pin, Details. User message: Edit, Copy, Select text, Delete. Same behaviour on touch and right-click.
+
+On an AI message: Copy, Select text, Share, Pin, Details. On a user message: Edit, Copy, Select text, Delete. Identical behaviour for long-press on touch and right-click on desktop, with the existing chat-list long-press-to-delete untouched.
 
 ## 11. NizaHub integration
-- Complete webhook event dispatch (identity, SSO, subscription updates) on top of the existing signature verification, reconcile plan state on login, and surface link status in the admin page.
+
+Build on the existing signed-request and signature-verification code: handle the incoming event types (identity update, sign-in, subscription created, changed and cancelled), apply them to the user's plan state, reconcile plan on login so a subscription bought elsewhere is honoured immediately, and show link and last-event status on the admin page.
+
+---
 
 ## 12. Verification checklist
-Build and typecheck clean; router regression set (chat, code, image, edit, vision, music, ambiguous single word, incomplete prompt, web search); clarification never fires on complete image prompts and never consumes quota; memory write/read/clear plus redaction proven against a password/API-key sample; aspect ratios produce the exact pixel sizes listed; STT on Android Chrome and iOS Safari including blur, resume and offline; music playback across navigation; limits, watermark and premium bypass; auth on all providers including WebView; RLS and grants on `user_memory`; PWA install and offline.
+
+- Build and typecheck clean.
+- Router regression set: plain chat, code request, clear image request, image edit with attachment, vision question, short music, full song, bare single word, incomplete instruction, conflicting intent, and a time-sensitive question.
+- Clarification never fires on a complete image prompt, never fires twice for the same request, and never consumes quota.
+- Memory: a fact is stored, retrieved on the next turn, overwritten when changed, and cleared from Profile. A message containing a password and an API key is proven to leave no stored row and no log entry.
+- Aspect ratios produce exactly the pixel sizes listed, and regenerate keeps the same ratio.
+- Speech-to-text tested on Android Chrome and iOS Safari including screen blur, resume, cancel, and offline send.
+- Music playback continues across navigation; save, download and delete all work.
+- Limits, the four free clean images, watermarking, and premium and admin bypasses all still behave as before.
+- Auth works on every provider including inside an in-app browser.
+- `user_memory` has RLS and grants; no new table is readable by another user.
+- PWA still installs and works offline.
 
 ## Technical notes
-- Router knowledge base and memory helpers live in `chat.server.ts`; server functions in `chat.functions.ts`. No keys client-side.
-- One migration for `user_memory` (RLS + GRANTs).
-- Web search executes inside a server function; providers and model names are never exposed to users.
+
+- New: `src/lib/router-kb.ts`, `src/lib/memory.server.ts`, `src/components/VoiceRecorder.tsx`, a music workspace route, one migration for `user_memory`.
+- Edited: `chat.server.ts` (router, ratios, web search, memory injection), `chat.functions.ts` (clarify path, memory write, ratio passthrough), `NizaApp.tsx`, `ChatMessage.tsx`, `CopyCard.tsx`, `CodeBlock.tsx`, `ImageViewer.tsx`, `MusicCard.tsx`, `niza-knowledge.ts`, the auth page and the NizaHub webhook route.
+- All keys stay server-side; no provider or model name is ever exposed to a user.
+
+---
+
+## Clarification questions
+
+1. **Web search provider** — no search API key exists in the project today. Should search run through the Lovable AI gateway's search-capable model (no new key, ships immediately), or do you want to supply a dedicated search API key?
+2. **Music workspace placement** — its own page reached from the sidebar, or a tab inside the current workspace?
+3. **Memory visibility** — should the memory list in Profile be read-only with a single Clear all, or should users be able to delete individual remembered facts?
+4. **Clarification chips** — chips only, or chips plus the ability to just type a normal reply (typing always works either way)?
+5. **Aspect ratio control** — inferred from the wording only, or also a small ratio picker in the composer for image requests?
+
+I can start with sensible defaults for all five (gateway search, own Music page, per-item delete, chips plus free typing, inference only) if you would rather not decide now.
