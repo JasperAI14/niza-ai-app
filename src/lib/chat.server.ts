@@ -11,6 +11,14 @@
 import { NIZA_SYSTEM_PROMPT } from "@/lib/niza-knowledge";
 import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
 import { detectImageRequest, detectImageEdit, detectMusicRequest } from "./intent";
+import {
+  buildClarification,
+  inferAspectRatio,
+  matchKnowledgeBase,
+  needsClarification,
+  type AspectRatio,
+  type RouteMode,
+} from "./router-kb";
 
 export type ProfileData = { plan: Plan; promo_used: boolean; email: string | null };
 
