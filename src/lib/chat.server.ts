@@ -266,7 +266,10 @@ async function callHuggingFaceText(messages: ChatMsg[]): Promise<string> {
   return txt;
 }
 
-export async function generateText(messages: ChatMsg[]): Promise<string> {
+export async function generateText(messages: ChatMsg[], extraSystem?: string): Promise<string> {
+  const payload: ChatMsg[] = extraSystem?.trim()
+    ? [{ role: "system", content: extraSystem.trim() }, ...messages]
+    : messages;
   const providers: Array<[string, (m: ChatMsg[]) => Promise<string>]> = [
     ["niza-chat-1.0", nizaChat10],
     ["niza-chat-1.1", nizaChat11],
@@ -277,7 +280,7 @@ export async function generateText(messages: ChatMsg[]): Promise<string> {
   let lastErr: any = null;
   for (const [name, p] of providers) {
     try {
-      return await p(messages);
+      return await p(payload);
     } catch (e) {
       lastErr = e;
       console.error(`[text] ${name} failed:`, (e as Error).message);
@@ -287,21 +290,73 @@ export async function generateText(messages: ChatMsg[]): Promise<string> {
 }
 
 // ============================================================
-// INTELLIGENT AI ROUTER
-// Every message passes through here. Deterministic signals win;
-// genuinely ambiguous messages are classified by the router model
-// (gateway first, then Niza Chat 1.0) with a safe CHAT fallback.
+// WEB SEARCH
+// Time-sensitive questions are answered from live results and
+// summarised normally. No engine or provider is ever named.
 // ============================================================
-export type RouteMode =
-  | "CHAT"
-  | "CODE"
-  | "IMAGE_GEN"
-  | "IMAGE_EDIT"
-  | "VISION"
-  | "MUSIC_SHORT"
-  | "MUSIC_SONG";
+export async function webSearchAnswer(
+  question: string,
+  extraSystem?: string,
+): Promise<{ text: string; sources: Array<{ title: string; url: string }> }> {
+  const key = process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
+  if (key) {
+    try {
+      const j = await geminiGenerate(
+        key,
+        "gemini-2.5-flash",
+        [{ role: "user", parts: [{ text: question }] }],
+        {
+          tools: [{ google_search: {} }],
+          systemInstruction: {
+            parts: [{ text: `${SYSTEM_PROMPT}\n${extraSystem ?? ""}\nAnswer using the latest information available and state the date of anything time-sensitive.` }],
+          },
+        },
+      );
+      const cand = j?.candidates?.[0];
+      const text = cand?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
+      const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
+      const sources: Array<{ title: string; url: string }> = [];
+      for (const c of chunks) {
+        const w = c?.web;
+        if (w?.uri && !sources.some((s) => s.url === w.uri)) {
+          sources.push({ title: w.title || w.uri, url: w.uri });
+        }
+      }
+      if (text) return { text, sources: sources.slice(0, 5) };
+    } catch (e) {
+      console.error("[search] live lookup failed:", (e as Error).message);
+    }
+  }
+  const text = await generateText([{ role: "user", content: question }], extraSystem);
+  return {
+    text: `${text}\n\n_I couldn't check live sources just now, so please verify anything time-sensitive._`,
+    sources: [],
+  };
+}
 
-export type RouteDecision = { mode: RouteMode; prompt: string; source: "rules" | "model" };
+// ============================================================
+// INTELLIGENT AI ROUTER
+// Deterministic knowledge-base rules win; only genuinely ambiguous
+// wording costs a classifier call. Thin requests go to clarification.
+// ============================================================
+export type { RouteMode } from "./router-kb";
+import {
+  buildClarification,
+  inferAspectRatio,
+  matchKnowledgeBase,
+  needsClarification,
+  type AspectRatio,
+  type RouteMode,
+} from "./router-kb";
+
+export type RouteDecision = {
+  mode: RouteMode;
+  prompt: string;
+  source: "rules" | "kb" | "model" | "clarify";
+  confidence: number;
+  ratio?: AspectRatio;
+  clarification?: { question: string; options: string[] };
+};
 
 const AMBIGUOUS =
   /\b(image|picture|photo|art|artwork|logo|poster|wallpaper|visual|song|music|track|beat|melody|tune|jingle|instrumental|draw|paint|illustrat|render)\w*\b/i;
@@ -311,10 +366,11 @@ const CODE_HINT =
 
 async function routeWithModel(text: string): Promise<RouteMode | null> {
   const instruction = `Classify the user request into exactly one label and reply with the label only.
-Labels: CHAT, CODE, IMAGE_GEN, MUSIC_SHORT, MUSIC_SONG.
+Labels: CHAT, CODE, IMAGE_GEN, MUSIC_SHORT, MUSIC_SONG, WEB_SEARCH.
 IMAGE_GEN only when the user wants a NEW picture created.
 MUSIC_SONG when they want a song with lyrics or vocals; MUSIC_SHORT for instrumentals, beats or melodies.
 CODE when they want code written, explained, reviewed or debugged.
+WEB_SEARCH when the answer depends on current, real-world, time-sensitive information.
 Otherwise CHAT.
 
 Request: ${text.slice(0, 600)}`;
@@ -325,8 +381,8 @@ Request: ${text.slice(0, 600)}`;
   for (const attempt of attempts) {
     try {
       const raw = (await attempt()).toUpperCase();
-      const found = (["IMAGE_GEN", "MUSIC_SONG", "MUSIC_SHORT", "CODE", "CHAT"] as RouteMode[]).find((l) =>
-        raw.includes(l),
+      const found = (["IMAGE_GEN", "MUSIC_SONG", "MUSIC_SHORT", "WEB_SEARCH", "CODE", "CHAT"] as RouteMode[]).find(
+        (l) => raw.includes(l),
       );
       if (found) return found;
     } catch (e) {
@@ -336,36 +392,67 @@ Request: ${text.slice(0, 600)}`;
   return null;
 }
 
-export async function routeRequest(text: string, hasImages: boolean): Promise<RouteDecision> {
+export async function routeRequest(
+  text: string,
+  hasImages: boolean,
+  opts: { skipClarify?: boolean; ratio?: AspectRatio; clarifyTurn?: number } = {},
+): Promise<RouteDecision> {
   const content = (text ?? "").trim();
 
+  // 1. Hard rules — an attachment decides the mode.
   if (hasImages) {
     return detectImageEdit(content)
-      ? { mode: "IMAGE_EDIT", prompt: content, source: "rules" }
-      : { mode: "VISION", prompt: content, source: "rules" };
+      ? { mode: "IMAGE_EDIT", prompt: content, source: "rules", confidence: 1 }
+      : { mode: "VISION", prompt: content, source: "rules", confidence: 1 };
   }
 
-  const music = detectMusicRequest(content);
-  if (music) {
+  // 2. Too thin to act on → one round of clarification (never billed).
+  if (!opts.skipClarify && needsClarification(content)) {
     return {
-      mode: music.tier === "song" ? "MUSIC_SONG" : "MUSIC_SHORT",
-      prompt: music.prompt,
-      source: "rules",
+      mode: "CLARIFY",
+      prompt: content,
+      source: "clarify",
+      confidence: 1,
+      clarification: buildClarification(content, opts.clarifyTurn ?? 0),
     };
   }
 
-  const image = detectImageRequest(content);
-  if (image) return { mode: "IMAGE_GEN", prompt: image, source: "rules" };
-
-  // Only spend a router call when the wording hints at media but the rules
-  // above did not fire — everything else goes straight to conversation.
-  if (AMBIGUOUS.test(content) && content.length <= 600) {
-    const mode = await routeWithModel(content);
-    if (mode && mode !== "CHAT") return { mode, prompt: content, source: "model" };
+  // 3. Knowledge-base match.
+  const kb = matchKnowledgeBase(content);
+  if (kb && kb.confidence >= 0.8) {
+    return {
+      mode: kb.mode,
+      prompt: content,
+      source: "kb",
+      confidence: kb.confidence,
+      ...(kb.mode === "IMAGE_GEN" ? { ratio: opts.ratio ?? inferAspectRatio(content) } : {}),
+    };
   }
 
-  return { mode: CODE_HINT.test(content) ? "CODE" : "CHAT", prompt: content, source: "rules" };
+  // 4. Model classification only for the ambiguous middle band.
+  if (AMBIGUOUS.test(content) && content.length <= 600) {
+    const mode = await routeWithModel(content);
+    if (mode && mode !== "CHAT") {
+      return {
+        mode,
+        prompt: content,
+        source: "model",
+        confidence: 0.7,
+        ...(mode === "IMAGE_GEN" ? { ratio: opts.ratio ?? inferAspectRatio(content) } : {}),
+      };
+    }
+  }
+
+  // 5. Fall back to the knowledge-base weak match, then conversation.
+  if (kb) return { mode: kb.mode, prompt: content, source: "kb", confidence: kb.confidence };
+  return {
+    mode: CODE_HINT.test(content) ? "CODE" : "CHAT",
+    prompt: content,
+    source: "rules",
+    confidence: 0.6,
+  };
 }
+
 
 // ---------------- Vision (analysis) ----------------
 export async function nizaVisionAnalyze(text: string, images: string[]): Promise<string> {
