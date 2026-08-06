@@ -17,7 +17,6 @@ import {
   nizaVisionAnalyze,
   routeRequest,
   smartTitle,
-  webSearchAnswer,
 } from "./chat.server";
 
 // ---------- types (erased at build time) ----------
@@ -524,25 +523,7 @@ export const sendMessage = createServerFn({ method: "POST" })
         console.error("vision failed:", e);
         assistantContent = "Sorry, I couldn't analyse that image right now. Please try again.";
       }
-    } else if (route.mode === "CLARIFY") {
-      // A clarification turn never consumes quota.
-      const c = route.clarification;
-      assistantContent = c
-        ? [c.question, ...(c.options.length ? [c.options.map((o) => `- ${o}`).join("\n")] : [])].join("\n\n")
-        : "Could you tell me a bit more about what you need?";
-    } else if (route.mode === "WEB_SEARCH") {
-      try {
-        const { text, sources } = await webSearchAnswer(route.prompt);
-        assistantContent = sources.length
-          ? `${text}\n\n**Sources**\n${sources.map((s) => `- [${s.title}](${s.url})`).join("\n")}`
-          : text;
-        if (!isAdmin) await bumpText();
-      } catch (e) {
-        console.error("web search failed:", e);
-        assistantContent = "I couldn't check live sources just now. Please try again shortly.";
-      }
     } else {
-
       const { data: history } = await supabase
         .from("messages")
         .select("role, content")
