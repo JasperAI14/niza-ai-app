@@ -340,14 +340,7 @@ export async function webSearchAnswer(
 // wording costs a classifier call. Thin requests go to clarification.
 // ============================================================
 export type { RouteMode } from "./router-kb";
-import {
-  buildClarification,
-  inferAspectRatio,
-  matchKnowledgeBase,
-  needsClarification,
-  type AspectRatio,
-  type RouteMode,
-} from "./router-kb";
+
 
 export type RouteDecision = {
   mode: RouteMode;
