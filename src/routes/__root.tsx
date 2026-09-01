@@ -82,7 +82,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#FDFCF8" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "Niza Prime" },
       { title: "Niza Prime AI — Chat, Code & Images" },
       { name: "description", content: "Niza Prime AI is a full-stack web application that acts as a unified AI assistant." },
@@ -100,7 +100,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "icon", href: "/icon-192.png", type: "image/png" },
+      { rel: "icon", href: "/favicon.png", type: "image/png" },
       { rel: "apple-touch-icon", href: "/icon-192.png" },
     ],
   }),
@@ -112,7 +112,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
@@ -135,6 +135,7 @@ function RootComponent() {
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
     });
     import("@/lib/register-pwa").then((m) => m.registerPwa()).catch(() => {});
+    import("@/lib/theme").then((m) => m.applyAccent(m.readAccent())).catch(() => {});
     return () => data.subscription.unsubscribe();
   }, [router, queryClient]);
 
