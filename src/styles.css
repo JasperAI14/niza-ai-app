@@ -109,3 +109,21 @@
     color: var(--color-foreground);
   }
 }
+
+/* Niza Prime custom message interaction: block arbitrary browser selection on
+   chat bubbles only. Inputs, code blocks and media controls stay native. */
+.niza-noselect {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.niza-noselect input,
+.niza-noselect textarea,
+.niza-noselect [contenteditable="true"],
+.niza-noselect pre,
+.niza-noselect code,
+.niza-noselect .niza-selectable {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
