@@ -750,9 +750,6 @@ export function NizaApp() {
               </div>
             )}
           </div>
-          <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted-foreground">
-            Niza Prime AI can make mistakes. Verify important information.
-          </p>
         </div>
       </main>
     </div>
