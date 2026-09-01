@@ -51,6 +51,7 @@ Extend the existing router to emit one validated decision object instead of a si
 - Deterministic rules first, model classification for the ambiguous band, schema-validated result with a safe chat fallback. Keyword presence alone never triggers a capability.
 - Conversation context (last turns, active media, pending clarification) is passed into classification so follow-ups resolve correctly.
 - Clarification asks only for the missing piece.
+- If the Router cannot work reliably, repair the existing Router and its configured AI integration. Do not ask for or create another API key when an existing configured key can be reused. Keep all existing secrets server-side and never expose or hardcode them.
 
 ## 6. Chat interface
 
@@ -86,7 +87,18 @@ Both keys are stored server-side only and read inside server handlers.
 
 ## 11. Video editing (Chat-based, real)
 
-- Upload video in Chat → router flags `requires_video_editing` → the request goes to an OpenRouter-backed intelligence layer that returns **structured operations only** (e.g. `{operation:"trim",start:5,end:30}`), validated against a schema. Model id is configurable, defaulting to a free OpenRouter route; the model never emits FFmpeg commands.
+## Build the complete Niza Prime AI Video Editor directly inside Chat. Do not create a separate Video Editor page.
+
+## When a user uploads a video and gives an editing instruction, the existing central Router must determine whether the request requires video editing. If yes, route the request to the Video Editing intelligence layer using the already-configured OpenRouter API key.
+
+## The video-editing intelligence should use a free/lowest-cost suitable OpenRouter model or the openrouter/free router where appropriate. OpenRouter's current free router automatically selects compatible free models, including models supporting structured outputs. �
+
+## OpenRouter +1
+
+## The AI must never generate FFmpeg commands. It only produces validated structured editing operations. FFmpeg WebAssembly performs the actual editing locally in the browser.
+
+## Build the actual editor, not merely the routing contract. (e.g. `{operation:"trim",start:5,end:30}`), validated against a schema. Model id is configurable, defaulting to a free OpenRouter route; the model never emits FFmpeg commands.
+
 - FFmpeg WebAssembly runs in a dedicated web worker in the browser so Chat never freezes.
 - Operations: trim, split, merge, crop, resize, rotate 90 cw/ccw/180, h/v flip, speed, mute, volume, reverse, compression/export quality, aspect-ratio conversion (1:1, 4:3, 3:4, 16:9, 9:16, original — crop, never stretch), audio replacement, background audio, text overlay, image overlay, brightness, contrast, saturation, grayscale, basic fades.
 - Import/replace/remove video with validation of size, duration, type, codec and processing limits, with plain-language errors.
