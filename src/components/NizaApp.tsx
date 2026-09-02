@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Plus, Send, Trash2, MessageSquare, Menu, Sparkles, Film, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
-import { ProfileRow } from "./ProfileRow";
+import { ChatSidebar } from "./ChatSidebar";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -497,103 +497,16 @@ export function NizaApp() {
 
   return (
     <div className="flex h-dvh w-full bg-background text-foreground">
-      {/* Sidebar */}
-      <aside
-        className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-border bg-sidebar transition-transform md:static md:translate-x-0`}
-      >
-        <div className="flex items-center justify-between border-b border-border p-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">N</div>
-            <span className="font-semibold">Niza Prime AI</span>
-          </div>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${plan === "premium" ? "bg-amber-500/20 text-amber-500" : "bg-muted text-muted-foreground"}`}>
-            {plan.toUpperCase()}
-          </span>
-        </div>
-        <button onClick={() => createMut.mutate()} className="m-3 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-accent">
-          <Plus className="h-4 w-4" /> New chat
-        </button>
-        <div className="flex-1 overflow-y-auto px-2 pb-3">
-          {(threadsQ.data ?? []).map((t) => (
-            <div
-              key={t.id}
-              onPointerDown={() => startPress(t.id)}
-              onPointerUp={cancelPress}
-              onPointerLeave={cancelPress}
-              onContextMenu={(e) => { e.preventDefault(); setPendingDelete(t.id); }}
-              className={`group relative mb-1 flex select-none items-center gap-2 rounded-md px-2 py-2 text-sm ${t.id === activeId ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"}`}
-            >
-              <button
-                onClick={() => { setActiveId(t.id); setSidebarOpen(false); }}
-                className="flex flex-1 items-center gap-2 truncate text-left"
-              >
-                <MessageSquare className="h-4 w-4 shrink-0 opacity-70" />
-                <span className="truncate">{t.title}</span>
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setPendingDelete(t.id); }}
-                className="opacity-60 transition-opacity hover:opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                aria-label="Delete chat"
-              >
-                <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-              </button>
-              {pendingDelete === t.id && (
-                <div className="absolute inset-x-1 top-full z-10 mt-1 rounded-lg border border-border bg-popover p-2 text-xs shadow-xl">
-                  <div className="mb-2 px-1 font-medium">Delete this chat?</div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => deleteMut.mutate(t.id)}
-                      className="flex-1 rounded-md bg-destructive px-2 py-1.5 text-destructive-foreground hover:opacity-90"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => setPendingDelete(null)}
-                      className="flex-1 rounded-md border border-border px-2 py-1.5 hover:bg-accent"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+      <ChatSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeId={activeId}
+        onSelect={(id) => setActiveId(id)}
+        onNewChat={() => createMut.mutate()}
+        plan={plan}
+        usage={usage ?? null}
+      />
 
-        {usage && (
-          <div className="space-y-2 border-t border-border p-3 text-xs">
-            <div>
-              <div className="mb-1 flex justify-between">
-                <span className="text-muted-foreground">Text</span>
-                <span className="font-medium">{usage.text_count} / {usage.text_limit}</span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className={`h-full transition-all ${barColor(textPct)}`} style={{ width: `${textPct}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 flex justify-between">
-                <span className="text-muted-foreground">Images</span>
-                <span className="font-medium">{usage.image_count} / {usage.image_limit}</span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className={`h-full transition-all ${barColor(imgPct)}`} style={{ width: `${imgPct}%` }} />
-              </div>
-            </div>
-            {plan === "premium" && (
-              <div className="mt-2 flex items-center gap-2 rounded-md border border-dashed border-border px-2 py-2 text-muted-foreground">
-                <Film className="h-3.5 w-3.5" />
-                <span>AI Video — Coming soon</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        <ProfileRow />
-
-      </aside>
-
-      {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">
