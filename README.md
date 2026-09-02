@@ -1,6 +1,6 @@
 # Niza Prime AI
 
-Build a full-stack AI assistant web application called "NovaMind AI".
+Build a full-stack AI assistant web application called "Niza Prime AI".
 
 
 
