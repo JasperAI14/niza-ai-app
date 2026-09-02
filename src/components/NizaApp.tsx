@@ -3,13 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, MessageSquare, Menu, Sparkles, Film, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
+import { Plus, Send, Menu, Sparkles, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
 import { ChatSidebar } from "./ChatSidebar";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
-  deleteThread as deleteThreadFn,
   getMe,
   getThreadMessages,
   listThreads,
@@ -55,7 +54,6 @@ export function NizaApp() {
   const fetchMe = useServerFn(getMe);
   const fetchMessages = useServerFn(getThreadMessages);
   const newThreadFn = useServerFn(createThread);
-  const removeThreadFn = useServerFn(deleteThreadFn);
   const sendFn = useServerFn(sendMessage);
   const regenFn = useServerFn(regenerateImage);
   const regenTextFn = useServerFn(regenerateText);
@@ -65,7 +63,6 @@ export function NizaApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [optimistic, setOptimistic] = useState<UIMessage[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<"text" | "image" | "both" | null>(null);
 
@@ -90,7 +87,6 @@ export function NizaApp() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const micStopRef = useRef<boolean>(false);
   const micBaseRef = useRef<string>("");   // text present before mic started
@@ -227,16 +223,6 @@ export function NizaApp() {
     },
   });
 
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => removeThreadFn({ data: { threadId: id } }),
-    onSuccess: (_d, id) => {
-      qc.setQueryData(["threads"], (old: any) => (old ?? []).filter((t: any) => t.id !== id));
-      if (activeId === id) setActiveId(null);
-      setPendingDelete(null);
-      toast.success("Chat deleted.");
-    },
-  });
-
   const sendMut = useMutation({
     mutationFn: async (payload: { content: string; images: string[]; isEdit: boolean }) => {
       let tid = activeId;
@@ -309,6 +295,169 @@ export function NizaApp() {
   useEffect(() => {
     if (!usage) return;
     const textPct = usage.text_count / usage.text_limit;
+    const imgPct = usage.image_count / usage.image_limit;
+    if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
+    if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
+  }, [usage?.text_count, usage?.image_count]);
+
+  const plan = meQ.data?.profile.plan ?? "free";
+  useEffect(() => {
+    if (!usage || plan === "premium") return;
+    const textBlockedNow = usage.text_count >= usage.text_limit;
+    const imgBlockedNow = usage.image_count >= usage.image_limit;
+    if (textBlockedNow && imgBlockedNow) maybeShowUpgrade("both");
+    else if (textBlockedNow) maybeShowUpgrade("text");
+    else if (imgBlockedNow) maybeShowUpgrade("image");
+  }, [usage?.text_count, usage?.image_count, usage?.text_limit, usage?.image_limit, plan]);
+
+  async function handleSend() {
+    const text = input.trim();
+    if ((!text && attachments.length === 0) || sendMut.isPending) return;
+    const stillProcessing = attachments.some((a) => a.kind === "image" && a.progress < 100);
+    if (stillProcessing) { toast.error("Please wait for image processing to finish."); return; }
+    const images = attachments.filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image").map((a) => a.dataUrl);
+    const isEdit = attachments.some((a) => a.kind === "image" && a.source === "edit");
+    const texts = attachments.filter((a): a is Extract<Attachment, { kind: "text" }> => a.kind === "text");
+    let combined = text;
+    if (texts.length > 0) {
+      let body = "";
+      for (const a of texts) {
+        const chunk = `\n\n--- Attached file: ${a.name} ---\n${a.text}\n--- end ${a.name} ---`;
+        if (body.length + chunk.length > MAX_CHARS) { body += `\n\n[Additional attachments truncated to stay within size limit.]`; break; }
+        body += chunk;
+      }
+      combined = `${text || "Please review the attached file(s)."}${body}`;
+    } else if (!combined && images.length > 0) {
+      combined = "Please analyze the attached image(s).";
+    }
+    setInput("");
+    setAttachments([]);
+    sendMut.mutate({ content: combined, images, isEdit });
+  }
+
+  // Enter creates a new line. Only Send button submits.
+  function onKeyDown(_e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // no-op: send happens via the Send button
+  }
+
+  // ---------- Voice-to-text (Web Speech API) ----------
+  // Duplication-proof design:
+  //  - One SpeechRecognition instance per session (fresh resultIndex space).
+  //  - Per-session `seen` Set keyed by resultIndex; each final counted once.
+  //  - micSessionRef token invalidates stale onresult/onend from prior instances.
+  //  - Auto-restart on onend spawns a NEW instance (never restarts the old one).
+  function updateInputFromMic(interim: string) {
+    const combined = [micBaseRef.current, micFinalRef.current, interim]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+([.,!?;:])/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+    setInput(combined);
+  }
+
+  function startMicSession() {
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true;
+    rec.continuous = true;
+    (rec as any).maxAlternatives = 1;
+
+    const sessionId = ++micSessionRef.current;
+    const seen = new Set<number>();
+
+    rec.onresult = (e: any) => {
+      if (sessionId !== micSessionRef.current) return; // stale — ignore
+      let interim = "";
+      const start = typeof e.resultIndex === "number" ? e.resultIndex : 0;
+      for (let i = start; i < e.results.length; i++) {
+        const res = e.results[i];
+        const t = String(res[0]?.transcript ?? "");
+        if (res.isFinal) {
+          if (!seen.has(i)) {
+            seen.add(i);
+            micFinalRef.current = (micFinalRef.current + " " + t).replace(/\s+/g, " ").trim();
+          }
+        } else {
+          interim += t;
+        }
+      }
+      updateInputFromMic(interim);
+    };
+
+    rec.onerror = (ev: any) => {
+      if (ev?.error === "not-allowed" || ev?.error === "service-not-allowed") {
+        toast.error("Microphone access denied.");
+        micStopRef.current = true;
+        micSessionRef.current++;
+        setListening(false);
+      }
+      // Other errors (no-speech, aborted, network) — onend will handle restart.
+    };
+
+    rec.onend = () => {
+      if (sessionId !== micSessionRef.current) return; // stale — ignore
+      if (micStopRef.current) { setListening(false); return; }
+      // Fresh instance so resultIndex resets cleanly. No re-emission of old finals.
+      startMicSession();
+    };
+
+    recognitionRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      // Rapid toggle can throw "already started" — safe to ignore; onend restarts.
+    }
+  }
+
+  function stopMicNow() {
+    micStopRef.current = true;
+    micSessionRef.current++; // invalidate any in-flight onresult/onend
+    setListening(false);
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
+    try { rec.abort(); } catch {}
+    try { rec.stop(); } catch {}
+  }
+
+  function toggleMic() {
+    if (typeof window === "undefined") return;
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { toast.error("Voice input isn't supported in this browser."); return; }
+    if (listening) { stopMicNow(); return; }
+    micStopRef.current = false;
+    micBaseRef.current = input.trim();
+    micFinalRef.current = "";
+    setListening(true);
+    startMicSession();
+  }
+
+  useEffect(() => () => {
+    micStopRef.current = true;
+    micSessionRef.current++;
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
+    try { rec.abort(); } catch {}
+    try { rec.stop(); } catch {}
+  }, []);
+
+
+
+  async function signOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
+  const textPct = usage.text_count / usage.text_limit;
     const imgPct = usage.image_count / usage.image_limit;
     if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
     if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
