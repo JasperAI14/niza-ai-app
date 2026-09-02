@@ -3,13 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Send, Trash2, MessageSquare, Menu, Sparkles, Film, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
-import { ProfileRow } from "./ProfileRow";
+import { Plus, Send, Menu, Sparkles, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
+import { ChatSidebar } from "./ChatSidebar";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
-  deleteThread as deleteThreadFn,
   getMe,
   getThreadMessages,
   listThreads,
@@ -55,7 +54,6 @@ export function NizaApp() {
   const fetchMe = useServerFn(getMe);
   const fetchMessages = useServerFn(getThreadMessages);
   const newThreadFn = useServerFn(createThread);
-  const removeThreadFn = useServerFn(deleteThreadFn);
   const sendFn = useServerFn(sendMessage);
   const regenFn = useServerFn(regenerateImage);
   const regenTextFn = useServerFn(regenerateText);
@@ -65,7 +63,6 @@ export function NizaApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [optimistic, setOptimistic] = useState<UIMessage[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState<"text" | "image" | "both" | null>(null);
 
@@ -90,7 +87,6 @@ export function NizaApp() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionRef = useRef<any>(null);
   const micStopRef = useRef<boolean>(false);
   const micBaseRef = useRef<string>("");   // text present before mic started
@@ -224,16 +220,6 @@ export function NizaApp() {
       setActiveId(t.id);
       setSidebarOpen(false);
       setTimeout(() => inputRef.current?.focus(), 0);
-    },
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => removeThreadFn({ data: { threadId: id } }),
-    onSuccess: (_d, id) => {
-      qc.setQueryData(["threads"], (old: any) => (old ?? []).filter((t: any) => t.id !== id));
-      if (activeId === id) setActiveId(null);
-      setPendingDelete(null);
-      toast.success("Chat deleted.");
     },
   });
 
@@ -471,6 +457,169 @@ export function NizaApp() {
     navigate({ to: "/auth", replace: true });
   }
 
+  const textPct = usage.text_count / usage.text_limit;
+    const imgPct = usage.image_count / usage.image_limit;
+    if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
+    if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
+  }, [usage?.text_count, usage?.image_count]);
+
+  const plan = meQ.data?.profile.plan ?? "free";
+  useEffect(() => {
+    if (!usage || plan === "premium") return;
+    const textBlockedNow = usage.text_count >= usage.text_limit;
+    const imgBlockedNow = usage.image_count >= usage.image_limit;
+    if (textBlockedNow && imgBlockedNow) maybeShowUpgrade("both");
+    else if (textBlockedNow) maybeShowUpgrade("text");
+    else if (imgBlockedNow) maybeShowUpgrade("image");
+  }, [usage?.text_count, usage?.image_count, usage?.text_limit, usage?.image_limit, plan]);
+
+  async function handleSend() {
+    const text = input.trim();
+    if ((!text && attachments.length === 0) || sendMut.isPending) return;
+    const stillProcessing = attachments.some((a) => a.kind === "image" && a.progress < 100);
+    if (stillProcessing) { toast.error("Please wait for image processing to finish."); return; }
+    const images = attachments.filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image").map((a) => a.dataUrl);
+    const isEdit = attachments.some((a) => a.kind === "image" && a.source === "edit");
+    const texts = attachments.filter((a): a is Extract<Attachment, { kind: "text" }> => a.kind === "text");
+    let combined = text;
+    if (texts.length > 0) {
+      let body = "";
+      for (const a of texts) {
+        const chunk = `\n\n--- Attached file: ${a.name} ---\n${a.text}\n--- end ${a.name} ---`;
+        if (body.length + chunk.length > MAX_CHARS) { body += `\n\n[Additional attachments truncated to stay within size limit.]`; break; }
+        body += chunk;
+      }
+      combined = `${text || "Please review the attached file(s)."}${body}`;
+    } else if (!combined && images.length > 0) {
+      combined = "Please analyze the attached image(s).";
+    }
+    setInput("");
+    setAttachments([]);
+    sendMut.mutate({ content: combined, images, isEdit });
+  }
+
+  // Enter creates a new line. Only Send button submits.
+  function onKeyDown(_e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // no-op: send happens via the Send button
+  }
+
+  // ---------- Voice-to-text (Web Speech API) ----------
+  // Duplication-proof design:
+  //  - One SpeechRecognition instance per session (fresh resultIndex space).
+  //  - Per-session `seen` Set keyed by resultIndex; each final counted once.
+  //  - micSessionRef token invalidates stale onresult/onend from prior instances.
+  //  - Auto-restart on onend spawns a NEW instance (never restarts the old one).
+  function updateInputFromMic(interim: string) {
+    const combined = [micBaseRef.current, micFinalRef.current, interim]
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+([.,!?;:])/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+    setInput(combined);
+  }
+
+  function startMicSession() {
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = navigator.language || "en-US";
+    rec.interimResults = true;
+    rec.continuous = true;
+    (rec as any).maxAlternatives = 1;
+
+    const sessionId = ++micSessionRef.current;
+    const seen = new Set<number>();
+
+    rec.onresult = (e: any) => {
+      if (sessionId !== micSessionRef.current) return; // stale — ignore
+      let interim = "";
+      const start = typeof e.resultIndex === "number" ? e.resultIndex : 0;
+      for (let i = start; i < e.results.length; i++) {
+        const res = e.results[i];
+        const t = String(res[0]?.transcript ?? "");
+        if (res.isFinal) {
+          if (!seen.has(i)) {
+            seen.add(i);
+            micFinalRef.current = (micFinalRef.current + " " + t).replace(/\s+/g, " ").trim();
+          }
+        } else {
+          interim += t;
+        }
+      }
+      updateInputFromMic(interim);
+    };
+
+    rec.onerror = (ev: any) => {
+      if (ev?.error === "not-allowed" || ev?.error === "service-not-allowed") {
+        toast.error("Microphone access denied.");
+        micStopRef.current = true;
+        micSessionRef.current++;
+        setListening(false);
+      }
+      // Other errors (no-speech, aborted, network) — onend will handle restart.
+    };
+
+    rec.onend = () => {
+      if (sessionId !== micSessionRef.current) return; // stale — ignore
+      if (micStopRef.current) { setListening(false); return; }
+      // Fresh instance so resultIndex resets cleanly. No re-emission of old finals.
+      startMicSession();
+    };
+
+    recognitionRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      // Rapid toggle can throw "already started" — safe to ignore; onend restarts.
+    }
+  }
+
+  function stopMicNow() {
+    micStopRef.current = true;
+    micSessionRef.current++; // invalidate any in-flight onresult/onend
+    setListening(false);
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
+    try { rec.abort(); } catch {}
+    try { rec.stop(); } catch {}
+  }
+
+  function toggleMic() {
+    if (typeof window === "undefined") return;
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) { toast.error("Voice input isn't supported in this browser."); return; }
+    if (listening) { stopMicNow(); return; }
+    micStopRef.current = false;
+    micBaseRef.current = input.trim();
+    micFinalRef.current = "";
+    setListening(true);
+    startMicSession();
+  }
+
+  useEffect(() => () => {
+    micStopRef.current = true;
+    micSessionRef.current++;
+    const rec = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!rec) return;
+    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
+    try { rec.abort(); } catch {}
+    try { rec.stop(); } catch {}
+  }, []);
+
+
+
+  async function signOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+
   // ---------- Long-press delete ----------
   function startPress(id: string) {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
@@ -497,103 +646,16 @@ export function NizaApp() {
 
   return (
     <div className="flex h-dvh w-full bg-background text-foreground">
-      {/* Sidebar */}
-      <aside
-        className={`${sidebarOpen ? "translate-x-0" : "-translate-x-full"} fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-border bg-sidebar transition-transform md:static md:translate-x-0`}
-      >
-        <div className="flex items-center justify-between border-b border-border p-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-bold">N</div>
-            <span className="font-semibold">Niza Prime AI</span>
-          </div>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${plan === "premium" ? "bg-amber-500/20 text-amber-500" : "bg-muted text-muted-foreground"}`}>
-            {plan.toUpperCase()}
-          </span>
-        </div>
-        <button onClick={() => createMut.mutate()} className="m-3 flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-accent">
-          <Plus className="h-4 w-4" /> New chat
-        </button>
-        <div className="flex-1 overflow-y-auto px-2 pb-3">
-          {(threadsQ.data ?? []).map((t) => (
-            <div
-              key={t.id}
-              onPointerDown={() => startPress(t.id)}
-              onPointerUp={cancelPress}
-              onPointerLeave={cancelPress}
-              onContextMenu={(e) => { e.preventDefault(); setPendingDelete(t.id); }}
-              className={`group relative mb-1 flex select-none items-center gap-2 rounded-md px-2 py-2 text-sm ${t.id === activeId ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"}`}
-            >
-              <button
-                onClick={() => { setActiveId(t.id); setSidebarOpen(false); }}
-                className="flex flex-1 items-center gap-2 truncate text-left"
-              >
-                <MessageSquare className="h-4 w-4 shrink-0 opacity-70" />
-                <span className="truncate">{t.title}</span>
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); setPendingDelete(t.id); }}
-                className="opacity-60 transition-opacity hover:opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                aria-label="Delete chat"
-              >
-                <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-              </button>
-              {pendingDelete === t.id && (
-                <div className="absolute inset-x-1 top-full z-10 mt-1 rounded-lg border border-border bg-popover p-2 text-xs shadow-xl">
-                  <div className="mb-2 px-1 font-medium">Delete this chat?</div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => deleteMut.mutate(t.id)}
-                      className="flex-1 rounded-md bg-destructive px-2 py-1.5 text-destructive-foreground hover:opacity-90"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => setPendingDelete(null)}
-                      className="flex-1 rounded-md border border-border px-2 py-1.5 hover:bg-accent"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+      <ChatSidebar
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeId={activeId}
+        onSelect={(id) => setActiveId(id)}
+        onNewChat={() => createMut.mutate()}
+        plan={plan}
+        usage={usage ?? null}
+      />
 
-        {usage && (
-          <div className="space-y-2 border-t border-border p-3 text-xs">
-            <div>
-              <div className="mb-1 flex justify-between">
-                <span className="text-muted-foreground">Text</span>
-                <span className="font-medium">{usage.text_count} / {usage.text_limit}</span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className={`h-full transition-all ${barColor(textPct)}`} style={{ width: `${textPct}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="mb-1 flex justify-between">
-                <span className="text-muted-foreground">Images</span>
-                <span className="font-medium">{usage.image_count} / {usage.image_limit}</span>
-              </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div className={`h-full transition-all ${barColor(imgPct)}`} style={{ width: `${imgPct}%` }} />
-              </div>
-            </div>
-            {plan === "premium" && (
-              <div className="mt-2 flex items-center gap-2 rounded-md border border-dashed border-border px-2 py-2 text-muted-foreground">
-                <Film className="h-3.5 w-3.5" />
-                <span>AI Video — Coming soon</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        <ProfileRow />
-
-      </aside>
-
-      {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">

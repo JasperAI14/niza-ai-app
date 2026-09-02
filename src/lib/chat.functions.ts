@@ -33,7 +33,7 @@ export type DBMessage = {
   created_at: string;
 };
 
-export type DBThread = { id: string; title: string; updated_at: string };
+export type DBThread = { id: string; title: string; updated_at: string; pinned?: boolean };
 
 export type ProfileData = { plan: Plan; promo_used: boolean; email: string | null };
 
@@ -87,7 +87,7 @@ export const listThreads = createServerFn({ method: "GET" })
     const { supabase, userId } = context as any;
     const { data, error } = await supabase
       .from("threads")
-      .select("id, title, updated_at")
+      .select("id, title, updated_at, pinned")
       .eq("user_id", userId)
       .order("updated_at", { ascending: false });
     if (error) {
@@ -143,7 +143,7 @@ export const searchMessages = createServerFn({ method: "GET" })
     const [{ data: threads }, { data: rows, error }] = await Promise.all([
       supabase
         .from("threads")
-        .select("id, title, updated_at")
+        .select("id, title, updated_at, pinned")
         .eq("user_id", userId)
         .ilike("title", `%${term}%`)
         .order("updated_at", { ascending: false })
@@ -346,7 +346,7 @@ export const createThread = createServerFn({ method: "POST" })
     const { data, error } = await supabase
       .from("threads")
       .insert({ user_id: userId, title: "New chat" })
-      .select("id, title, updated_at")
+      .select("id, title, updated_at, pinned")
       .single();
     if (error) {
       console.error("[createThread] DB error:", error);
@@ -373,6 +373,25 @@ export const renameThread = createServerFn({ method: "POST" })
       throw new Error("Could not rename this chat.");
     }
     return { ok: true, title };
+  });
+
+export const setThreadPinned = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { threadId: string; pinned: boolean }) =>
+    z.object({ threadId: z.string().uuid(), pinned: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { error } = await supabase
+      .from("threads")
+      .update({ pinned: data.pinned })
+      .eq("user_id", userId)
+      .eq("id", data.threadId);
+    if (error) {
+      console.error("[setThreadPinned] DB error:", error);
+      throw new Error("Could not update this chat.");
+    }
+    return { ok: true, pinned: data.pinned };
   });
 
 export const deleteThread = createServerFn({ method: "POST" })
