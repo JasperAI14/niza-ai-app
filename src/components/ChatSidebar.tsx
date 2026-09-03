@@ -17,7 +17,6 @@ import {
 import { BrandLogo } from "./BrandLogo";
 import { ProfileRow } from "./ProfileRow";
 import {
-  createThread,
   deleteThread as deleteThreadFn,
   listThreads,
   renameThread as renameThreadFn,
@@ -120,7 +119,9 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
   async function startUpgrade() {
     setUpgrading(true);
     try {
-      const res = await checkoutFn({ data: { callbackUrl: `${window.location.origin}/upgrade/callback` } });
+      const res = await checkoutFn({
+        data: { callbackUrl: `${window.location.origin}/upgrade/callback` },
+      });
       if (!res.ok) {
         toast.error(res.message);
         setUpgrading(false);
@@ -219,7 +220,9 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
                   }}
                 />
                 <MenuRow
-                  icon={t.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                  icon={
+                    t.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />
+                  }
                   label={t.pinned ? "Unpin" : "Pin"}
                   onClick={() => {
                     pinMut.mutate({ id: t.id, pinned: !t.pinned });
@@ -251,7 +254,9 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
           <span className="truncate text-sm font-semibold tracking-tight">Niza Prime AI</span>
           <span
             className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-              plan === "premium" ? "bg-amber-500/20 text-amber-600" : "bg-muted text-muted-foreground"
+              plan === "premium"
+                ? "bg-amber-500/20 text-amber-600"
+                : "bg-muted text-muted-foreground"
             }`}
           >
             {String(plan).toUpperCase()}
@@ -308,7 +313,11 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
               disabled={upgrading}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
             >
-              {upgrading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {upgrading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
               Upgrade to Premium
             </button>
           </div>
@@ -418,7 +427,10 @@ function SearchDialog({
   }, [q]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10vh]" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10vh]"
+      onClick={onClose}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -440,7 +452,11 @@ function SearchDialog({
           </button>
         </div>
         <div className="max-h-[55vh] overflow-y-auto p-2">
-          {!res && <p className="px-2 py-3 text-xs text-muted-foreground">Type to search your chat history.</p>}
+          {!res && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              Type to search your chat history.
+            </p>
+          )}
           {res && res.threads.length === 0 && res.messages.length === 0 && (
             <p className="px-2 py-3 text-xs text-muted-foreground">No matches found.</p>
           )}
