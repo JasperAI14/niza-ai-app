@@ -448,15 +448,6 @@ export function NizaApp() {
     try { rec.stop(); } catch {}
   }, []);
 
-
-
-  async function signOut() {
-    await qc.cancelQueries();
-    qc.clear();
-    await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
-  }
-
   const textPct = usage ? Math.min(100, Math.round((usage.text_count / usage.text_limit) * 100)) : 0;
   const imgPct = usage ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100)) : 0;
   const textBlocked = !!usage && usage.text_count >= usage.text_limit;
