@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Plus, Send, Menu, Sparkles, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
 import { ChatSidebar } from "./ChatSidebar";
 
-import { supabase } from "@/integrations/supabase/client";
 import {
   createThread,
   getMe,
