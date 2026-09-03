@@ -17,7 +17,6 @@ import {
 import { BrandLogo } from "./BrandLogo";
 import { ProfileRow } from "./ProfileRow";
 import {
-  createThread,
   deleteThread as deleteThreadFn,
   listThreads,
   renameThread as renameThreadFn,
