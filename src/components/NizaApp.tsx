@@ -2,7 +2,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Send, Menu, Sparkles, X, FileText, ImageIcon, Mic, MicOff, Pencil } from "lucide-react";
+import {
+  Plus,
+  Send,
+  Menu,
+  Sparkles,
+  X,
+  FileText,
+  ImageIcon,
+  Mic,
+  MicOff,
+  Pencil,
+} from "lucide-react";
 import { ChatSidebar } from "./ChatSidebar";
 
 import {
@@ -29,7 +40,14 @@ const SAMPLES = [
 
 type Attachment =
   | { kind: "text"; name: string; text: string; progress: 100 }
-  | { kind: "image"; name: string; dataUrl: string; bytes: number; progress: number; source?: "upload" | "edit" };
+  | {
+      kind: "image";
+      name: string;
+      dataUrl: string;
+      bytes: number;
+      progress: number;
+      source?: "upload" | "edit";
+    };
 
 // Fetch a remote image URL and convert to data URL for round-trip editing.
 async function urlToDataUrl(url: string): Promise<{ dataUrl: string; bytes: number }> {
@@ -86,8 +104,8 @@ export function NizaApp() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const micStopRef = useRef<boolean>(false);
-  const micBaseRef = useRef<string>("");   // text present before mic started
-  const micFinalRef = useRef<string>("");  // finalized speech text (append-only)
+  const micBaseRef = useRef<string>(""); // text present before mic started
+  const micFinalRef = useRef<string>(""); // finalized speech text (append-only)
   const micSessionRef = useRef<number>(0); // invalidates stale event handlers
 
   const MAX_TEXT_FILE_BYTES = 1_000_000;
@@ -117,20 +135,42 @@ export function NizaApp() {
           continue;
         }
         const placeholderIdx = attachments.length;
-        const placeholder: Attachment = { kind: "image", name: f.name, dataUrl: "", bytes: 0, progress: 0, source: "upload" };
+        const placeholder: Attachment = {
+          kind: "image",
+          name: f.name,
+          dataUrl: "",
+          bytes: 0,
+          progress: 0,
+          source: "upload",
+        };
         setAttachments((a) => [...a, placeholder]);
         try {
           const out = await compressImage(f, (pct) => {
-            setAttachments((a) => a.map((it, i) => (i === placeholderIdx && it.kind === "image" ? { ...it, progress: pct } : it)));
+            setAttachments((a) =>
+              a.map((it, i) =>
+                i === placeholderIdx && it.kind === "image" ? { ...it, progress: pct } : it,
+              ),
+            );
           });
           if (out.bytes > MAX_IMAGE_BYTES) {
             toast.error(`${f.name} still exceeds 20MB after compression.`);
             setAttachments((a) => a.filter((_, i) => i !== placeholderIdx));
             continue;
           }
-          setAttachments((a) => a.map((it, i) => (i === placeholderIdx && it.kind === "image"
-            ? { kind: "image", name: out.name, dataUrl: out.dataUrl, bytes: out.bytes, progress: 100, source: "upload" }
-            : it)));
+          setAttachments((a) =>
+            a.map((it, i) =>
+              i === placeholderIdx && it.kind === "image"
+                ? {
+                    kind: "image",
+                    name: out.name,
+                    dataUrl: out.dataUrl,
+                    bytes: out.bytes,
+                    progress: 100,
+                    source: "upload",
+                  }
+                : it,
+            ),
+          );
         } catch (err) {
           toast.error(`Could not process ${f.name}: ${(err as Error).message}`);
           setAttachments((a) => a.filter((_, i) => i !== placeholderIdx));
@@ -141,8 +181,11 @@ export function NizaApp() {
         toast.error(`${f.name} is too large (max 1MB for text files).`);
         continue;
       }
-      const isText = f.type.startsWith("text/") ||
-        /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|env|html?|css|scss|js|jsx|ts|tsx|py|rb|go|rs|java|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|sql|xml)$/i.test(f.name);
+      const isText =
+        f.type.startsWith("text/") ||
+        /\.(txt|md|markdown|json|csv|tsv|log|ya?ml|toml|ini|env|html?|css|scss|js|jsx|ts|tsx|py|rb|go|rs|java|c|cc|cpp|h|hpp|cs|php|sh|bash|zsh|sql|xml)$/i.test(
+          f.name,
+        );
       if (!isText) {
         toast.error(`${f.name}: unsupported file type.`);
         continue;
@@ -166,7 +209,10 @@ export function NizaApp() {
       const { dataUrl, bytes } = await urlToDataUrl(url);
       setAttachments((a) => {
         const others = a.filter((x) => x.kind !== "image" || x.source !== "edit");
-        return [...others, { kind: "image", name: "generated.png", dataUrl, bytes, progress: 100, source: "edit" }];
+        return [
+          ...others,
+          { kind: "image", name: "generated.png", dataUrl, bytes, progress: 100, source: "edit" },
+        ];
       });
       toast.success("Image ready — type your edit instructions.");
       setTimeout(() => inputRef.current?.focus(), 0);
@@ -195,8 +241,13 @@ export function NizaApp() {
 
   const messages = useMemo<UIMessage[]>(() => {
     const base: UIMessage[] = (messagesQ.data ?? []).map((m: DBMessage) => ({
-      id: m.id, role: m.role, content: m.content, image_url: m.image_url,
-      audio_url: m.audio_url ?? null, watermarked: m.watermarked, edited: m.edited,
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      image_url: m.image_url,
+      audio_url: m.audio_url ?? null,
+      watermarked: m.watermarked,
+      edited: m.edited,
       created_at: m.created_at,
     }));
     return [...base, ...optimistic];
@@ -231,17 +282,33 @@ export function NizaApp() {
       }
       const hasImages = payload.images.length > 0;
       const isMusic = !hasImages && !!detectMusicRequest(payload.content);
-      const looksImage = payload.isEdit || (!hasImages && !isMusic && /\b(image|picture|photo|draw|paint|render|illustration|logo|wallpaper|poster|sketch|portrait|imagine|visualize)\b/i.test(payload.content));
+      const looksImage =
+        payload.isEdit ||
+        (!hasImages &&
+          !isMusic &&
+          /\b(image|picture|photo|draw|paint|render|illustration|logo|wallpaper|poster|sketch|portrait|imagine|visualize)\b/i.test(
+            payload.content,
+          ));
       const userMsg: UIMessage = {
-        id: "u-" + crypto.randomUUID(), role: "user", content: payload.content,
+        id: "u-" + crypto.randomUUID(),
+        role: "user",
+        content: payload.content,
         image_url: hasImages ? payload.images[0] : null,
       };
       const pending: UIMessage = {
-        id: "p-" + crypto.randomUUID(), role: "assistant", content: "",
+        id: "p-" + crypto.randomUUID(),
+        role: "assistant",
+        content: "",
         pending: isMusic ? "music" : looksImage ? "image" : "text",
       };
       setOptimistic([userMsg, pending]);
-      const res = await sendFn({ data: { threadId: tid, content: payload.content, images: hasImages ? payload.images : undefined } });
+      const res = await sendFn({
+        data: {
+          threadId: tid,
+          content: payload.content,
+          images: hasImages ? payload.images : undefined,
+        },
+      });
       return { res, tid };
     },
     onSuccess: async ({ res, tid }) => {
@@ -311,16 +378,26 @@ export function NizaApp() {
     const text = input.trim();
     if ((!text && attachments.length === 0) || sendMut.isPending) return;
     const stillProcessing = attachments.some((a) => a.kind === "image" && a.progress < 100);
-    if (stillProcessing) { toast.error("Please wait for image processing to finish."); return; }
-    const images = attachments.filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image").map((a) => a.dataUrl);
+    if (stillProcessing) {
+      toast.error("Please wait for image processing to finish.");
+      return;
+    }
+    const images = attachments
+      .filter((a): a is Extract<Attachment, { kind: "image" }> => a.kind === "image")
+      .map((a) => a.dataUrl);
     const isEdit = attachments.some((a) => a.kind === "image" && a.source === "edit");
-    const texts = attachments.filter((a): a is Extract<Attachment, { kind: "text" }> => a.kind === "text");
+    const texts = attachments.filter(
+      (a): a is Extract<Attachment, { kind: "text" }> => a.kind === "text",
+    );
     let combined = text;
     if (texts.length > 0) {
       let body = "";
       for (const a of texts) {
         const chunk = `\n\n--- Attached file: ${a.name} ---\n${a.text}\n--- end ${a.name} ---`;
-        if (body.length + chunk.length > MAX_CHARS) { body += `\n\n[Additional attachments truncated to stay within size limit.]`; break; }
+        if (body.length + chunk.length > MAX_CHARS) {
+          body += `\n\n[Additional attachments truncated to stay within size limit.]`;
+          break;
+        }
         body += chunk;
       }
       combined = `${text || "Please review the attached file(s)."}${body}`;
@@ -397,7 +474,10 @@ export function NizaApp() {
 
     rec.onend = () => {
       if (sessionId !== micSessionRef.current) return; // stale — ignore
-      if (micStopRef.current) { setListening(false); return; }
+      if (micStopRef.current) {
+        setListening(false);
+        return;
+      }
       // Fresh instance so resultIndex resets cleanly. No re-emission of old finals.
       startMicSession();
     };
@@ -417,16 +497,30 @@ export function NizaApp() {
     const rec = recognitionRef.current;
     recognitionRef.current = null;
     if (!rec) return;
-    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
-    try { rec.abort(); } catch {}
-    try { rec.stop(); } catch {}
+    try {
+      rec.onend = null;
+      rec.onresult = null;
+      rec.onerror = null;
+    } catch {}
+    try {
+      rec.abort();
+    } catch {}
+    try {
+      rec.stop();
+    } catch {}
   }
 
   function toggleMic() {
     if (typeof window === "undefined") return;
     const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) { toast.error("Voice input isn't supported in this browser."); return; }
-    if (listening) { stopMicNow(); return; }
+    if (!SR) {
+      toast.error("Voice input isn't supported in this browser.");
+      return;
+    }
+    if (listening) {
+      stopMicNow();
+      return;
+    }
     micStopRef.current = false;
     micBaseRef.current = input.trim();
     micFinalRef.current = "";
@@ -434,19 +528,34 @@ export function NizaApp() {
     startMicSession();
   }
 
-  useEffect(() => () => {
-    micStopRef.current = true;
-    micSessionRef.current++;
-    const rec = recognitionRef.current;
-    recognitionRef.current = null;
-    if (!rec) return;
-    try { rec.onend = null; rec.onresult = null; rec.onerror = null; } catch {}
-    try { rec.abort(); } catch {}
-    try { rec.stop(); } catch {}
-  }, []);
+  useEffect(
+    () => () => {
+      micStopRef.current = true;
+      micSessionRef.current++;
+      const rec = recognitionRef.current;
+      recognitionRef.current = null;
+      if (!rec) return;
+      try {
+        rec.onend = null;
+        rec.onresult = null;
+        rec.onerror = null;
+      } catch {}
+      try {
+        rec.abort();
+      } catch {}
+      try {
+        rec.stop();
+      } catch {}
+    },
+    [],
+  );
 
-  const textPct = usage ? Math.min(100, Math.round((usage.text_count / usage.text_limit) * 100)) : 0;
-  const imgPct = usage ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100)) : 0;
+  const textPct = usage
+    ? Math.min(100, Math.round((usage.text_count / usage.text_limit) * 100))
+    : 0;
+  const imgPct = usage
+    ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100))
+    : 0;
   const textBlocked = !!usage && usage.text_count >= usage.text_limit;
   const imgBlocked = !!usage && usage.image_count >= usage.image_limit;
   const inputBlocked = textBlocked && imgBlocked;
@@ -471,7 +580,6 @@ export function NizaApp() {
         usage={usage ?? null}
       />
 
-
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-2 border-b border-border px-4 py-3 md:hidden">
@@ -484,14 +592,20 @@ export function NizaApp() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-2xl font-bold shadow-lg shadow-primary/30">N</div>
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-2xl font-bold shadow-lg shadow-primary/30">
+                N
+              </div>
               <h1 className="text-2xl font-semibold">How can I help you today?</h1>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
                 Chat, generate images, or upload a photo to analyze or edit.
               </p>
               <div className="mt-6 grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
                 {SAMPLES.map((s) => (
-                  <button key={s} onClick={() => setInput(s)} className="rounded-lg border border-border bg-card p-3 text-left text-sm hover:bg-accent">
+                  <button
+                    key={s}
+                    onClick={() => setInput(s)}
+                    className="rounded-lg border border-border bg-card p-3 text-left text-sm hover:bg-accent"
+                  >
                     <Sparkles className="mb-1 inline h-4 w-4 text-primary" />
                     <div>{s}</div>
                   </button>
@@ -515,7 +629,11 @@ export function NizaApp() {
         </div>
 
         <div className="border-t border-border bg-background p-3 md:p-4">
-          <UpgradeInlineBanner open={!!upgradeReason && plan !== "premium"} reason={upgradeReason ?? undefined} onClose={dismissUpgrade} />
+          <UpgradeInlineBanner
+            open={!!upgradeReason && plan !== "premium"}
+            reason={upgradeReason ?? undefined}
+            onClose={dismissUpgrade}
+          />
           {inputBlocked && (
             <div className="mx-auto mb-2 max-w-3xl rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-center text-xs text-destructive">
               You've reached your usage limit. It will reset automatically.
@@ -524,31 +642,48 @@ export function NizaApp() {
           {hasEditingImage && (
             <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs">
               <Pencil className="h-3.5 w-3.5 text-primary" />
-              <span>Editing image — type what to change (e.g. "remove the background", "make it anime style").</span>
+              <span>
+                Editing image — type what to change (e.g. "remove the background", "make it anime
+                style").
+              </span>
             </div>
           )}
           <div className="mx-auto max-w-3xl">
             {attachments.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {attachments.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-lg border border-border bg-card p-1.5 pr-2 text-xs">
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-card p-1.5 pr-2 text-xs"
+                  >
                     {a.kind === "image" ? (
                       <>
                         {a.dataUrl ? (
-                          <img src={a.dataUrl} alt={a.name} className="h-10 w-10 rounded object-cover" />
+                          <img
+                            src={a.dataUrl}
+                            alt={a.name}
+                            className="h-10 w-10 rounded object-cover"
+                          />
                         ) : (
                           <div className="flex h-10 w-10 items-center justify-center rounded bg-muted">
                             <ImageIcon className="h-4 w-4 text-muted-foreground" />
                           </div>
                         )}
                         <div className="flex flex-col">
-                          <span className="max-w-[160px] truncate">{a.source === "edit" ? "Editing image" : a.name}</span>
+                          <span className="max-w-[160px] truncate">
+                            {a.source === "edit" ? "Editing image" : a.name}
+                          </span>
                           {a.progress < 100 ? (
                             <div className="mt-0.5 h-1 w-32 overflow-hidden rounded-full bg-muted">
-                              <div className="h-full bg-primary transition-all" style={{ width: `${a.progress}%` }} />
+                              <div
+                                className="h-full bg-primary transition-all"
+                                style={{ width: `${a.progress}%` }}
+                              />
                             </div>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground">{(a.bytes / 1024).toFixed(0)} KB · ready</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {(a.bytes / 1024).toFixed(0)} KB · ready
+                            </span>
                           )}
                         </div>
                       </>
@@ -558,7 +693,11 @@ export function NizaApp() {
                         <span className="max-w-[180px] truncate">{a.name}</span>
                       </>
                     )}
-                    <button onClick={() => removeAttachment(i)} aria-label={`Remove ${a.name}`} className="ml-1">
+                    <button
+                      onClick={() => removeAttachment(i)}
+                      aria-label={`Remove ${a.name}`}
+                      className="ml-1"
+                    >
                       <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </button>
                   </div>
@@ -605,11 +744,15 @@ export function NizaApp() {
                 }`}
               >
                 {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                {listening && <span className="absolute inset-0 -z-10 animate-ping rounded-lg bg-primary/40" />}
+                {listening && (
+                  <span className="absolute inset-0 -z-10 animate-ping rounded-lg bg-primary/40" />
+                )}
               </button>
               <button
                 onClick={handleSend}
-                disabled={sendMut.isPending || (!input.trim() && attachments.length === 0) || inputBlocked}
+                disabled={
+                  sendMut.isPending || (!input.trim() && attachments.length === 0) || inputBlocked
+                }
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition disabled:opacity-40 hover:opacity-90"
                 aria-label="Send"
               >
