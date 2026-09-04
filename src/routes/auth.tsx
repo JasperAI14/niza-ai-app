@@ -6,6 +6,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { submitPromo, getMe } from "@/lib/chat.functions";
 import { isInAppWebView } from "@/lib/image-utils";
 import { toast } from "sonner";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -157,9 +158,7 @@ function AuthPage() {
     <div className="flex min-h-dvh items-center justify-center bg-background p-4">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-xl font-bold">
-            N
-          </div>
+          <BrandLogo size={64} />
           <h1 className="text-2xl font-bold">Niza Prime AI</h1>
           <p className="mt-1 text-sm text-muted-foreground">Chat, code, and create images — all in one.</p>
         </div>
