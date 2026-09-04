@@ -6,7 +6,7 @@
 export type AccentKey = "indigo" | "violet" | "azure" | "teal" | "amber" | "rose";
 
 export const ACCENTS: Record<AccentKey, { label: string; primary: string; swatch: string }> = {
-  indigo: { label: "Prime Indigo", primary: "oklch(0.52 0.19 275)", swatch: "#5A5CE0" },
+  indigo: { label: "Prime Blue", primary: "oklch(0.62 0.14 275)", swatch: "#7F8CE3" },
   violet: { label: "Violet", primary: "oklch(0.53 0.21 300)", swatch: "#8347D9" },
   azure: { label: "Azure", primary: "oklch(0.56 0.16 245)", swatch: "#3F7FD8" },
   teal: { label: "Teal", primary: "oklch(0.55 0.11 190)", swatch: "#2E9095" },

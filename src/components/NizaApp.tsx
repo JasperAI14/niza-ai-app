@@ -30,6 +30,7 @@ import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-uti
 import { detectMusicRequest } from "@/lib/intent";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 import { UpgradeInlineBanner } from "./UpgradeModal";
+import { BrandLogo } from "./BrandLogo";
 
 const SAMPLES = [
   "Explain async/await in JavaScript",
@@ -586,14 +587,15 @@ export function NizaApp() {
           <button onClick={() => setSidebarOpen(true)} aria-label="Open menu">
             <Menu className="h-5 w-5" />
           </button>
+          <BrandLogo size={26} />
           <span className="font-semibold">Niza Prime AI</span>
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-2xl font-bold shadow-lg shadow-primary/30">
-                N
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-lg shadow-primary/20">
+                <BrandLogo size={56} />
               </div>
               <h1 className="text-2xl font-semibold">How can I help you today?</h1>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
