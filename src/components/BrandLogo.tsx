@@ -10,7 +10,7 @@ export function BrandLogo({ size = 32, withWordmark = false, className = "", sub
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
       <img
-        src="/niza-logo.png"
+        src="/niza-logo-mark.png"
         alt="Niza Prime AI"
         width={size}
         height={size}
