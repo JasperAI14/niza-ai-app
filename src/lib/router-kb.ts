@@ -21,22 +21,23 @@ export type RouteMode =
   | "CLARIFY";
 
 // ---------------------------------------------------------------- ratios
-export type AspectRatio = "1:1" | "3:4" | "9:16" | "4:3" | "16:9";
+export type AspectRatio = "1:1" | "3:4" | "4:5" | "9:16" | "4:3" | "16:9";
 
 export const RATIO_SIZES: Record<AspectRatio, { width: number; height: number; label: string }> = {
   "1:1": { width: 1024, height: 1024, label: "Square" },
   "3:4": { width: 896, height: 1152, label: "Portrait" },
+  "4:5": { width: 1024, height: 1280, label: "Portrait" },
   "9:16": { width: 768, height: 1344, label: "Tall" },
   "4:3": { width: 1152, height: 896, label: "Landscape" },
   "16:9": { width: 1344, height: 768, label: "Wide" },
 };
 
-export const RATIO_ORDER: AspectRatio[] = ["1:1", "3:4", "9:16", "4:3", "16:9"];
+export const RATIO_ORDER: AspectRatio[] = ["1:1", "3:4", "4:5", "9:16", "4:3", "16:9"];
 
 /** Explicit request wins; otherwise infer from the subject of the picture. */
 export function inferAspectRatio(text: string): AspectRatio {
   const t = (text ?? "").toLowerCase();
-  const explicit = /\b(1\s*[:x]\s*1|3\s*[:x]\s*4|9\s*[:x]\s*16|4\s*[:x]\s*3|16\s*[:x]\s*9)\b/.exec(t);
+  const explicit = /\b(1\s*[:x]\s*1|3\s*[:x]\s*4|4\s*[:x]\s*5|9\s*[:x]\s*16|4\s*[:x]\s*3|16\s*[:x]\s*9)\b/.exec(t);
   if (explicit) {
     const norm = explicit[1].replace(/\s|x/g, ":");
     if (RATIO_ORDER.includes(norm as AspectRatio)) return norm as AspectRatio;
