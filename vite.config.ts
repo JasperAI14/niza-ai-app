@@ -11,6 +11,7 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
+    optimizeDeps: { exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"] },
     plugins: [
       VitePWA({
         registerType: "autoUpdate",
