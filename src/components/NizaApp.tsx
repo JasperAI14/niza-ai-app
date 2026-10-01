@@ -13,6 +13,7 @@ import {
   Mic,
   MicOff,
   Pencil,
+  Film,
 } from "lucide-react";
 import { ChatSidebar } from "./ChatSidebar";
 
@@ -27,6 +28,15 @@ import {
   type DBMessage,
 } from "@/lib/chat.functions";
 import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-utils";
+import {
+  isAcceptedVideo,
+  MAX_VIDEO_BYTES,
+  planVideoEdit,
+  runVideoEdit,
+  VIDEO_EXT_RE,
+  VIDEO_HELP,
+} from "@/lib/video-edit";
+import { supabase } from "@/integrations/supabase/client";
 import { detectMusicRequest } from "@/lib/intent";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 import { UpgradeInlineBanner } from "./UpgradeModal";
@@ -41,6 +51,7 @@ const SAMPLES = [
 
 type Attachment =
   | { kind: "text"; name: string; text: string; progress: 100 }
+  | { kind: "video"; name: string; file: File; progress: 100 }
   | {
       kind: "image";
       name: string;
@@ -124,6 +135,18 @@ export function NizaApp() {
   async function handleFiles(files: FileList | null) {
     if (!files) return;
     for (const f of Array.from(files)) {
+      if (isAcceptedVideo(f)) {
+        if (f.size > MAX_VIDEO_BYTES) {
+          toast.error(`${f.name} is too large (max 500MB for videos).`);
+          continue;
+        }
+        setAttachments((a) => [
+          ...a.filter((x) => x.kind !== "video"),
+          { kind: "video", name: f.name, file: f, progress: 100 },
+        ]);
+        toast.success("Video attached — describe the edit you want.");
+        continue;
+      }
       const isImg = isAcceptedImage(f);
       if (isImg) {
         const currentImages = attachments.filter((a) => a.kind === "image").length;
@@ -375,9 +398,108 @@ export function NizaApp() {
     else if (imgBlockedNow) maybeShowUpgrade("image");
   }, [usage?.text_count, usage?.image_count, usage?.text_limit, usage?.image_limit, plan]);
 
+  // ---------- Video editing (FFmpeg in the browser, saved to the conversation) ----------
+  const [videoBusy, setVideoBusy] = useState(false);
+  async function runVideoFlow(file: File, instruction: string) {
+    setVideoBusy(true);
+    const pendingId = "p-" + crypto.randomUUID();
+    const setStatus = (s: string) =>
+      setOptimistic((o) => o.map((m) => (m.id === pendingId ? { ...m, content: s } : m)));
+    const localUrl = URL.createObjectURL(file);
+    setOptimistic([
+      { id: "u-" + crypto.randomUUID(), role: "user", content: instruction, video_url: localUrl },
+      { id: pendingId, role: "assistant", content: "Uploading your video…", pending: "video" },
+    ]);
+    try {
+      let tid = activeId;
+      if (!tid) {
+        const t = await newThreadFn();
+        qc.setQueryData(["threads"], (old: any) => [t, ...(old ?? [])]);
+        setActiveId(t.id);
+        tid = t.id;
+      }
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id;
+      if (!uid) throw new Error("Please sign in again.");
+      const ext = (VIDEO_EXT_RE.exec(file.name)?.[1] ?? "mp4").toLowerCase();
+      const origPath = `${uid}/${tid}/${crypto.randomUUID()}-original.${ext}`;
+      const up = await supabase.storage
+        .from("chat-videos")
+        .upload(origPath, file, { contentType: file.type || "video/mp4" });
+      if (up.error) throw new Error("Video upload failed. Please try again.");
+
+      const plan = planVideoEdit(instruction);
+      let assistantContent = VIDEO_HELP;
+      let editedPath: string | null = null;
+      if (plan) {
+        const out = await runVideoEdit(file, file.name, plan, (stage, pct) =>
+          setStatus(pct > 0 ? `${stage} ${pct}%` : stage),
+        );
+        setStatus("Saving the edited video…");
+        editedPath = `${uid}/${tid}/${crypto.randomUUID()}-edited.${plan.outExt}`;
+        const up2 = await supabase.storage
+          .from("chat-videos")
+          .upload(editedPath, out, { contentType: out.type });
+        if (up2.error) throw new Error("Could not save the edited video.");
+        assistantContent = `Done — I ${plan.summary.join(", ")}. Tap **Edit video** to keep refining it.`;
+      }
+      const ins = await supabase.from("messages").insert([
+        { thread_id: tid, user_id: uid, role: "user", content: instruction, video_url: origPath },
+        {
+          thread_id: tid,
+          user_id: uid,
+          role: "assistant",
+          content: assistantContent,
+          video_url: editedPath,
+          created_at: new Date(Date.now() + 1000).toISOString(),
+        },
+      ]);
+      if (ins.error) throw new Error("Could not save to the conversation.");
+      await supabase.from("threads").update({ updated_at: new Date().toISOString() }).eq("id", tid);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["messages", tid] }),
+        qc.invalidateQueries({ queryKey: ["threads"] }),
+      ]);
+      setOptimistic([]);
+    } catch (e) {
+      toast.error((e as Error).message || "Video editing failed.");
+      setOptimistic([]);
+    } finally {
+      URL.revokeObjectURL(localUrl);
+      setVideoBusy(false);
+    }
+  }
+
+  async function handleEditVideo(url: string) {
+    try {
+      toast.message("Loading video for editing…");
+      const r = await fetch(url);
+      if (!r.ok) throw new Error();
+      const blob = await r.blob();
+      const isGif = blob.type.includes("gif");
+      const file = new File([blob], isGif ? "edit.gif" : "edit.mp4", { type: blob.type || "video/mp4" });
+      setAttachments((a) => [...a.filter((x) => x.kind !== "video"), { kind: "video", name: "Edited video", file, progress: 100 }]);
+      toast.success("Video ready — describe your next edit.");
+      setTimeout(() => inputRef.current?.focus(), 0);
+    } catch {
+      toast.error("Could not load video for editing.");
+    }
+  }
+
   async function handleSend() {
     const text = input.trim();
-    if ((!text && attachments.length === 0) || sendMut.isPending) return;
+    if ((!text && attachments.length === 0) || sendMut.isPending || videoBusy) return;
+    const vid = attachments.find((a): a is Extract<Attachment, { kind: "video" }> => a.kind === "video");
+    if (vid) {
+      if (!text) {
+        toast.error("Describe how to edit the video, e.g. “trim from 0:05 to 0:20”.");
+        return;
+      }
+      setInput("");
+      setAttachments([]);
+      void runVideoFlow(vid.file, text);
+      return;
+    }
     const stillProcessing = attachments.some((a) => a.kind === "image" && a.progress < 100);
     if (stillProcessing) {
       toast.error("Please wait for image processing to finish.");
@@ -623,6 +745,7 @@ export function NizaApp() {
                   onRegenerate={(id) => regenMut.mutate(id)}
                   regenerating={regenMut.isPending && regenMut.variables === m.id}
                   onEditImage={handleEditImage}
+                  onEditVideo={handleEditVideo}
                   onRegenerateText={(id) => regenTextMut.mutate(id)}
                 />
               ))}
@@ -658,7 +781,17 @@ export function NizaApp() {
                     key={i}
                     className="flex items-center gap-2 rounded-lg border border-border bg-card p-1.5 pr-2 text-xs"
                   >
-                    {a.kind === "image" ? (
+                    {a.kind === "video" ? (
+                      <>
+                        <Film className="h-4 w-4 text-primary" />
+                        <div className="flex flex-col">
+                          <span className="max-w-[180px] truncate">{a.name}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {(a.file.size / (1024 * 1024)).toFixed(1)} MB · describe your edit
+                          </span>
+                        </div>
+                      </>
+                    ) : a.kind === "image" ? (
                       <>
                         {a.dataUrl ? (
                           <img
