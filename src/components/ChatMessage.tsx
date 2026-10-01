@@ -16,10 +16,11 @@ export type UIMessage = {
   content: string;
   image_url?: string | null;
   audio_url?: string | null;
+  video_url?: string | null;
   watermarked?: boolean;
   edited?: boolean;
   created_at?: string;
-  pending?: "text" | "image" | "music" | null;
+  pending?: "text" | "image" | "music" | "video" | null;
 };
 
 async function nativeShare(text: string, url?: string) {
@@ -62,6 +63,7 @@ export function ChatMessage({
   onRegenerateText,
   onSaveMusic,
   onLongPress,
+  onEditVideo,
 }: {
   message: UIMessage;
   onRegenerate?: (id: string) => void;
@@ -70,11 +72,12 @@ export function ChatMessage({
   onRegenerateText?: (id: string) => void;
   onSaveMusic?: (id: string) => void;
   onLongPress?: (m: UIMessage) => void;
+  onEditVideo?: (url: string) => void;
 }) {
   const isUser = message.role === "user";
   const isPending = !!message.pending;
   const isPersisted = !message.id.startsWith("p-") && !message.id.startsWith("u-");
-  const hasMedia = !!message.image_url || !!message.audio_url;
+  const hasMedia = !!message.image_url || !!message.audio_url || !!message.video_url;
   const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(message.content);
   const showCopy = !isUser && !isPending && !hasMedia && !useCopyCard && isReusableContent(message.content);
   const showRegenText = !isUser && !isPending && !hasMedia && !!onRegenerateText && isPersisted;
@@ -120,6 +123,11 @@ export function ChatMessage({
           {/* ---- Pending states ---- */}
           {message.pending === "music" ? (
             <MusicPending />
+          ) : message.pending === "video" ? (
+            <div className="flex w-full max-w-sm items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>{message.content || "Editing your video…"}</span>
+            </div>
           ) : message.pending === "image" ? (
             <div className="w-full max-w-sm">
               <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border bg-muted/40">
@@ -173,6 +181,42 @@ export function ChatMessage({
                     <Maximize2 className="h-3.5 w-3.5 text-white" />
                   </span>
                 </button>
+              )}
+
+              {/* ---- Video ---- */}
+              {message.video_url && (
+                <div className="mt-1 w-full max-w-md">
+                  {/\.gif(\?|$)/i.test(message.video_url) ? (
+                    <img src={message.video_url} alt="Edited GIF" className="block w-full rounded-2xl border border-border" />
+                  ) : (
+                    <video
+                      src={message.video_url}
+                      controls
+                      playsInline
+                      preload="metadata"
+                      className="block max-h-[60vh] w-full rounded-2xl border border-border bg-foreground/5"
+                    />
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    {onEditVideo && isPersisted && (
+                      <Action onClick={() => onEditVideo(message.video_url!)} label="Edit video">
+                        <Pencil className="h-3 w-3" />
+                      </Action>
+                    )}
+                    <Action
+                      onClick={() => {
+                        const a = document.createElement("a");
+                        a.href = message.video_url!;
+                        a.download = /\.gif(\?|$)/i.test(message.video_url!) ? "niza-edit.gif" : "niza-edit.mp4";
+                        a.target = "_blank";
+                        a.click();
+                      }}
+                      label="Download"
+                    >
+                      <Download className="h-3 w-3" />
+                    </Action>
+                  </div>
+                </div>
               )}
 
               {/* ---- Music ---- */}

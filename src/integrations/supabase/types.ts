@@ -115,6 +115,7 @@ export type Database = {
           role: string
           thread_id: string
           user_id: string
+          video_url: string | null
           watermarked: boolean
         }
         Insert: {
@@ -130,6 +131,7 @@ export type Database = {
           role: string
           thread_id: string
           user_id: string
+          video_url?: string | null
           watermarked?: boolean
         }
         Update: {
@@ -145,6 +147,7 @@ export type Database = {
           role?: string
           thread_id?: string
           user_id?: string
+          video_url?: string | null
           watermarked?: boolean
         }
         Relationships: [

@@ -28,6 +28,7 @@ export type DBMessage = {
   content: string;
   image_url: string | null;
   audio_url?: string | null;
+  video_url?: string | null;
   watermarked?: boolean;
   edited?: boolean;
   created_at: string;
@@ -104,7 +105,7 @@ export const getThreadMessages = createServerFn({ method: "GET" })
     const { supabase, userId } = context as any;
     const { data: msgs, error } = await supabase
       .from("messages")
-      .select("id, thread_id, role, content, image_url, audio_url, watermarked, edited, created_at")
+      .select("id, thread_id, role, content, image_url, audio_url, video_url, watermarked, edited, created_at")
       .eq("user_id", userId)
       .eq("thread_id", data.threadId)
       .order("created_at", { ascending: true });
@@ -128,7 +129,14 @@ export const getThreadMessages = createServerFn({ method: "GET" })
           .createSignedUrl(aud, 60 * 60 * 6);
         aud = signedA?.signedUrl ?? null;
       }
-      out.push({ ...m, image_url: img, audio_url: aud });
+      let vid: string | null = m.video_url ?? null;
+      if (vid && !vid.startsWith("http")) {
+        const { data: signedV } = await supabase.storage
+          .from("chat-videos")
+          .createSignedUrl(vid, 60 * 60 * 6);
+        vid = signedV?.signedUrl ?? null;
+      }
+      out.push({ ...m, image_url: img, audio_url: aud, video_url: vid });
     }
     return out;
   });
