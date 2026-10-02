@@ -29,6 +29,8 @@ export type DBMessage = {
   image_url: string | null;
   audio_url?: string | null;
   video_url?: string | null;
+  media_model?: string | null;
+  media_prompt?: string | null;
   watermarked?: boolean;
   edited?: boolean;
   created_at: string;
@@ -105,7 +107,7 @@ export const getThreadMessages = createServerFn({ method: "GET" })
     const { supabase, userId } = context as any;
     const { data: msgs, error } = await supabase
       .from("messages")
-      .select("id, thread_id, role, content, image_url, audio_url, video_url, watermarked, edited, created_at")
+      .select("id, thread_id, role, content, image_url, audio_url, video_url, media_model, media_prompt, watermarked, edited, created_at")
       .eq("user_id", userId)
       .eq("thread_id", data.threadId)
       .order("created_at", { ascending: true });
@@ -813,4 +815,88 @@ export const deleteMusic = createServerFn({ method: "POST" })
     const { supabase, userId } = context as any;
     await supabase.from("music_history").delete().eq("user_id", userId).eq("id", data.id);
     return { ok: true };
+  });
+
+// ---------------- Puter image generation (client-side provider) ----------------
+export const linkPuterAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { token: string }) => z.object({ token: z.string().min(10).max(4000) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { userId } = context as any;
+    // Verify the Puter session server-side so the linked username is real.
+    const r = await fetch("https://api.puter.com/whoami", {
+      headers: { Authorization: `Bearer ${data.token}` },
+    });
+    if (!r.ok) return { ok: false as const, message: "Could not verify your Puter account. Please sign in again." };
+    const who = (await r.json().catch(() => null)) as { username?: string } | null;
+    if (!who?.username) return { ok: false as const, message: "Could not verify your Puter account." };
+    const adm = await adminClient();
+    await adm
+      .from("profiles")
+      .update({ puter_username: who.username, puter_linked_at: new Date().toISOString() })
+      .eq("id", userId);
+    return { ok: true as const, username: who.username };
+  });
+
+export const getPuterLink = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context as any;
+    const { data } = await supabase.from("profiles").select("puter_username").eq("id", userId).maybeSingle();
+    return { username: (data?.puter_username as string | null) ?? null };
+  });
+
+export const completePuterImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string; dataUrl: string }) =>
+    z
+      .object({
+        messageId: z.string().uuid(),
+        dataUrl: z.string().regex(/^data:image\/(png|jpeg|jpg|webp);base64,/i).max(20_000_000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: msg } = await supabase
+      .from("messages")
+      .select("id, media_model")
+      .eq("id", data.messageId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (!msg) return { ok: false as const, message: "Message not found." };
+    const m = /^data:(image\/[a-z]+);base64,(.*)$/i.exec(data.dataUrl)!;
+    const mime = m[1].toLowerCase();
+    const bytes = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+    const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+    const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("generated-images").upload(path, bytes, { contentType: mime });
+    if (error) return { ok: false as const, message: "Could not save the image. Please retry." };
+    await supabase
+      .from("messages")
+      .update({ image_url: path, content: "Here's your image:", media_model: "puter" })
+      .eq("id", data.messageId);
+    return { ok: true as const };
+  });
+
+export const failPuterImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { messageId: string; reason: string }) =>
+    z.object({ messageId: z.string().uuid(), reason: z.string().max(300) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context as any;
+    const { data: msg } = await supabase
+      .from("messages")
+      .select("media_model")
+      .eq("id", data.messageId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    const ratio = String(msg?.media_model ?? "").split(":")[1] ?? "1:1";
+    await supabase
+      .from("messages")
+      .update({ content: data.reason, media_model: `puter-failed:${ratio}` })
+      .eq("id", data.messageId)
+      .eq("user_id", userId);
+    return { ok: true as const };
   });
