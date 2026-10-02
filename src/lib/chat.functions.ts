@@ -534,14 +534,36 @@ export const sendMessage = createServerFn({ method: "POST" })
         assistantContent = "Sorry, image editing is unavailable right now. Please try again later.";
       }
     } else if (route.mode === "IMAGE_GEN") {
-      try {
-        await mediaDelay(isAdmin);
-        await storeImage(await generateImage(route.prompt));
-        assistantContent = "Here's your image:";
-        if (!isAdmin) await bumpImage();
-      } catch (e) {
-        console.error("image gen failed:", e);
-        assistantContent = "Sorry, image generation is unavailable right now. Please try again later.";
+      // Production image generation runs through the user's connected Puter account (client-side).
+      if (profile.plan !== "premium" && !isAdmin) {
+        assistantContent =
+          "Image generation is part of **Niza Premium**. Upgrade to unlock it, then connect your Puter account to start creating images.";
+      } else {
+        const { data: ph } = await supabase
+          .from("messages")
+          .insert({
+            thread_id: data.threadId,
+            user_id: userId,
+            role: "assistant",
+            content: "",
+            media_prompt: route.prompt,
+            media_model: `puter-pending:${(route as any).ratio ?? "1:1"}`,
+          })
+          .select("id")
+          .single();
+        let newTitle: string | null = null;
+        if (thread.title === "New chat") {
+          newTitle = await smartTitle(data.content, "Image");
+          await supabase.from("threads").update({ title: newTitle }).eq("id", data.threadId);
+        }
+        return {
+          ok: true,
+          kind: "image_request" as const,
+          messageId: ph!.id as string,
+          prompt: route.prompt,
+          ratio: ((route as any).ratio ?? "1:1") as string,
+          title: newTitle,
+        };
       }
     } else if (route.mode === "VISION") {
       try {
