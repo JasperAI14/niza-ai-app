@@ -25,8 +25,13 @@ import {
   sendMessage,
   regenerateImage,
   regenerateText,
+  linkPuterAccount,
+  getPuterLink,
+  completePuterImage,
+  failPuterImage,
   type DBMessage,
 } from "@/lib/chat.functions";
+import { puterGenerateImage, puterSession, puterSignIn } from "@/lib/puter";
 import { compressImage, isAcceptedImage, MAX_IMAGE_BYTES } from "@/lib/image-utils";
 import {
   isAcceptedVideo,
@@ -918,7 +923,7 @@ export function NizaApp() {
                 ref={fileRef}
                 type="file"
                 multiple
-                accept="image/jpeg,image/jpg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.txt,.md,.markdown,.json,.csv,.tsv,.log,.yaml,.yml,.toml,.ini,.env,.html,.htm,.css,.scss,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.c,.cc,.cpp,.h,.hpp,.cs,.php,.sh,.bash,.zsh,.sql,.xml,text/*"
+                accept="video/*,.mp4,.mov,.m4v,.webm,.mkv,.3gp,image/jpeg,image/jpg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.txt,.md,.markdown,.json,.csv,.tsv,.log,.yaml,.yml,.toml,.ini,.env,.html,.htm,.css,.scss,.js,.jsx,.ts,.tsx,.py,.rb,.go,.rs,.java,.c,.cc,.cpp,.h,.hpp,.cs,.php,.sh,.bash,.zsh,.sql,.xml,text/*"
                 className="hidden"
                 onChange={(e) => handleFiles(e.target.files)}
               />
