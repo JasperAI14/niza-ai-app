@@ -17,6 +17,8 @@ export type UIMessage = {
   image_url?: string | null;
   audio_url?: string | null;
   video_url?: string | null;
+  media_model?: string | null;
+  media_prompt?: string | null;
   watermarked?: boolean;
   edited?: boolean;
   created_at?: string;
@@ -64,7 +66,11 @@ export function ChatMessage({
   onSaveMusic,
   onLongPress,
   onEditVideo,
+  imageGenerating,
+  onRetryImage,
 }: {
+  imageGenerating?: boolean;
+  onRetryImage?: (m: UIMessage) => void;
   message: UIMessage;
   onRegenerate?: (id: string) => void;
   regenerating?: boolean;
@@ -75,7 +81,12 @@ export function ChatMessage({
   onEditVideo?: (url: string) => void;
 }) {
   const isUser = message.role === "user";
-  const isPending = !!message.pending;
+  const puterState = !message.image_url && message.media_model?.startsWith("puter-")
+    ? message.media_model.startsWith("puter-failed") && !imageGenerating
+      ? "failed"
+      : "pending"
+    : null;
+  const isPending = !!message.pending || !!puterState;
   const isPersisted = !message.id.startsWith("p-") && !message.id.startsWith("u-");
   const hasMedia = !!message.image_url || !!message.audio_url || !!message.video_url;
   const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(message.content);
@@ -128,9 +139,21 @@ export function ChatMessage({
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{message.content || "Editing your video…"}</span>
             </div>
-          ) : message.pending === "image" ? (
-            <div className="w-full max-w-sm">
-              <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border bg-muted/40">
+          ) : puterState === "failed" ? (
+            <div className="flex h-56 w-56 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-muted/40 p-4 text-center">
+              <span className="text-xs text-muted-foreground">{message.content || "Image generation failed."}</span>
+              {onRetryImage && (
+                <button
+                  onClick={() => onRetryImage(message)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+                >
+                  <RefreshCw className="h-3 w-3" /> Retry
+                </button>
+              )}
+            </div>
+          ) : message.pending === "image" || puterState === "pending" ? (
+            <div className="h-56 w-56 shrink-0">
+              <div className="relative h-full w-full overflow-hidden rounded-2xl border border-border bg-muted/40">
                 <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-muted/60 via-muted/20 to-muted/60" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -168,10 +191,10 @@ export function ChatMessage({
               {message.image_url && (
                 <button
                   onClick={() => setViewer(true)}
-                  className="group relative mt-1 block w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-background"
+                  className="group relative mt-1 inline-block max-w-[min(280px,100%)] overflow-hidden rounded-2xl border border-border bg-background"
                   aria-label="Open image full screen"
                 >
-                  <img src={message.image_url} alt="Generated" className="block w-full" loading="lazy" />
+                  <img src={message.image_url} alt="Generated" className="block h-auto max-h-[360px] w-auto max-w-full object-contain" loading="lazy" />
                   {message.watermarked && (
                     <span className="pointer-events-none absolute bottom-2 right-2.5 text-[11px] font-semibold text-white/75 drop-shadow-[0_1px_3px_rgba(0,0,0,0.65)]">
                       Niza Prime AI

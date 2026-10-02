@@ -327,6 +327,8 @@ export type Database = {
           plan_expires_at: string | null
           plan_status: string
           promo_used: boolean
+          puter_linked_at: string | null
+          puter_username: string | null
           username: string | null
         }
         Insert: {
@@ -342,6 +344,8 @@ export type Database = {
           plan_expires_at?: string | null
           plan_status?: string
           promo_used?: boolean
+          puter_linked_at?: string | null
+          puter_username?: string | null
           username?: string | null
         }
         Update: {
@@ -357,6 +361,8 @@ export type Database = {
           plan_expires_at?: string | null
           plan_status?: string
           promo_used?: boolean
+          puter_linked_at?: string | null
+          puter_username?: string | null
           username?: string | null
         }
         Relationships: []
