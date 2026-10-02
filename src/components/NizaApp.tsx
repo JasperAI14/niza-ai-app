@@ -84,6 +84,64 @@ export function NizaApp() {
   const sendFn = useServerFn(sendMessage);
   const regenFn = useServerFn(regenerateImage);
   const regenTextFn = useServerFn(regenerateText);
+  const linkPuterFn = useServerFn(linkPuterAccount);
+  const getPuterLinkFn = useServerFn(getPuterLink);
+  const completePuterFn = useServerFn(completePuterImage);
+  const failPuterFn = useServerFn(failPuterImage);
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
+  const [puterNeeded, setPuterNeeded] = useState<{
+    messageId: string;
+    prompt: string;
+    ratio: string;
+    tid: string;
+  } | null>(null);
+
+  function setGenerating(id: string, on: boolean) {
+    setGeneratingIds((s) => {
+      const n = new Set(s);
+      if (on) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+  }
+
+  async function runPuterImage(messageId: string, prompt: string, ratio: string, tid: string) {
+    if (!prompt) return;
+    setGenerating(messageId, true);
+    try {
+      const [session, link] = await Promise.all([puterSession(), getPuterLinkFn()]);
+      if (!session || !link.username || session.username !== link.username) {
+        // Never use a Puter session that isn't linked to this Niza account.
+        await failPuterFn({ data: { messageId, reason: "Connect your Puter account to generate this image." } });
+        setPuterNeeded({ messageId, prompt, ratio, tid });
+        return;
+      }
+      const dataUrl = await puterGenerateImage(prompt, ratio);
+      const r = await completePuterFn({ data: { messageId, dataUrl } });
+      if (!r.ok) throw new Error(r.message);
+    } catch (e) {
+      await failPuterFn({
+        data: { messageId, reason: (e as Error).message || "Image generation failed. Please retry." },
+      }).catch(() => {});
+    } finally {
+      setGenerating(messageId, false);
+      await qc.invalidateQueries({ queryKey: ["messages", tid] });
+    }
+  }
+
+  async function connectPuter() {
+    const job = puterNeeded;
+    try {
+      const s = await puterSignIn();
+      const r = await linkPuterFn({ data: { token: s.token } });
+      if (!r.ok) throw new Error(r.message);
+      toast.success(`Puter connected as ${r.username}.`);
+      setPuterNeeded(null);
+      if (job) void runPuterImage(job.messageId, job.prompt, job.ratio, job.tid);
+    } catch (e) {
+      toast.error((e as Error).message || "Could not connect Puter.");
+    }
+  }
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -271,6 +329,9 @@ export function NizaApp() {
       image_url: m.image_url,
       audio_url: m.audio_url ?? null,
       watermarked: m.watermarked,
+      video_url: m.video_url ?? null,
+      media_model: m.media_model ?? null,
+      media_prompt: m.media_prompt ?? null,
       edited: m.edited,
       created_at: m.created_at,
     }));
@@ -347,6 +408,9 @@ export function NizaApp() {
         qc.invalidateQueries({ queryKey: ["me"] }),
       ]);
       setOptimistic([]);
+      if (res.ok && res.kind === "image_request") {
+        void runPuterImage(res.messageId, res.prompt, res.ratio, tid);
+      }
       setTimeout(() => inputRef.current?.focus(), 0);
     },
     onError: () => {
@@ -744,6 +808,16 @@ export function NizaApp() {
                   message={m}
                   onRegenerate={(id) => regenMut.mutate(id)}
                   regenerating={regenMut.isPending && regenMut.variables === m.id}
+                  imageGenerating={generatingIds.has(m.id)}
+                  onRetryImage={(msg) =>
+                    activeId &&
+                    runPuterImage(
+                      msg.id,
+                      msg.media_prompt ?? "",
+                      String(msg.media_model ?? "").split(":")[1] || "1:1",
+                      activeId,
+                    )
+                  }
                   onEditImage={handleEditImage}
                   onEditVideo={handleEditVideo}
                   onRegenerateText={(id) => regenTextMut.mutate(id)}
@@ -907,6 +981,31 @@ export function NizaApp() {
           </div>
         </div>
       </main>
+      {puterNeeded && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl">
+            <h2 className="text-base font-semibold">Connect your Puter account</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Niza Premium creates images through your own Puter account. Sign in once and Niza will
+              continue your image automatically.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setPuterNeeded(null)}
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                Not now
+              </button>
+              <button
+                onClick={connectPuter}
+                className="rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground"
+              >
+                Connect Puter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
