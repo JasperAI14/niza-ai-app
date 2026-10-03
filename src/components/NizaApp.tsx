@@ -452,7 +452,6 @@ export function NizaApp() {
   useEffect(() => {
     if (!usage) return;
     const textPct = usage.text_count / usage.text_limit;
-    const imgPct = usage.image_count / usage.image_limit;
     if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
   }, [usage?.text_count, usage?.image_count]);
 
@@ -460,10 +459,7 @@ export function NizaApp() {
   useEffect(() => {
     if (!usage || plan === "premium") return;
     const textBlockedNow = usage.text_count >= usage.text_limit;
-    const imgBlockedNow = usage.image_count >= usage.image_limit;
-    if (textBlockedNow && imgBlockedNow) maybeShowUpgrade("both");
-    else if (textBlockedNow) maybeShowUpgrade("text");
-    else if (imgBlockedNow) maybeShowUpgrade("image");
+    if (textBlockedNow) maybeShowUpgrade("text");
   }, [usage?.text_count, usage?.image_count, usage?.text_limit, usage?.image_limit, plan]);
 
   // ---------- Video editing (FFmpeg in the browser, saved to the conversation) ----------
