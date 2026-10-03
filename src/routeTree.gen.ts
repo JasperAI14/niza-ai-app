@@ -15,6 +15,7 @@ import { Route as DocsRouteImport } from './routes/docs'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile.index'
 import { Route as AuthenticatedUpgradeCallbackRouteImport } from './routes/_authenticated/upgrade.callback'
 import { Route as AuthenticatedProfileSupportRouteImport } from './routes/_authenticated/profile.support'
@@ -58,6 +59,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
+  id: '/api/transcribe',
+  path: '/api/transcribe',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedProfileIndexRoute =
   AuthenticatedProfileIndexRouteImport.update({
@@ -149,6 +155,7 @@ export interface FileRoutesByFullPath {
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/': typeof AuthenticatedIndexRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -192,6 +200,7 @@ export interface FileRoutesById {
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/api/transcribe': typeof ApiTranscribeRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/_authenticated/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -216,6 +225,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/help'
     | '/reset-password'
+    | '/api/transcribe'
     | '/admin/errors'
     | '/admin/nova-hub'
     | '/admin/payments'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/help'
     | '/reset-password'
+    | '/api/transcribe'
     | '/'
     | '/admin/errors'
     | '/admin/nova-hub'
@@ -258,6 +269,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/help'
     | '/reset-password'
+    | '/api/transcribe'
     | '/_authenticated/'
     | '/_authenticated/admin/errors'
     | '/_authenticated/admin/nova-hub'
@@ -281,6 +293,7 @@ export interface RootRouteChildren {
   DocsRoute: typeof DocsRoute
   HelpRoute: typeof HelpRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiTranscribeRoute: typeof ApiTranscribeRoute
   ApiPublicNovahubWebhookRoute: typeof ApiPublicNovahubWebhookRoute
   ApiPublicPaystackWebhookRoute: typeof ApiPublicPaystackWebhookRoute
 }
@@ -328,6 +341,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/transcribe': {
+      id: '/api/transcribe'
+      path: '/api/transcribe'
+      fullPath: '/api/transcribe'
+      preLoaderRoute: typeof ApiTranscribeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/profile/': {
       id: '/_authenticated/profile/'
@@ -471,6 +491,7 @@ const rootRouteChildren: RootRouteChildren = {
   DocsRoute: DocsRoute,
   HelpRoute: HelpRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiTranscribeRoute: ApiTranscribeRoute,
   ApiPublicNovahubWebhookRoute: ApiPublicNovahubWebhookRoute,
   ApiPublicPaystackWebhookRoute: ApiPublicPaystackWebhookRoute,
 }

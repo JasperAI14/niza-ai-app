@@ -42,6 +42,7 @@ import {
   VIDEO_HELP,
 } from "@/lib/video-edit";
 import { supabase } from "@/integrations/supabase/client";
+import { startRecording, type Recorder } from "@/lib/record-wav";
 import { detectMusicRequest } from "@/lib/intent";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 import { UpgradeInlineBanner } from "./UpgradeModal";
@@ -177,11 +178,6 @@ export function NizaApp() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const micStopRef = useRef<boolean>(false);
-  const micBaseRef = useRef<string>(""); // text present before mic started
-  const micFinalRef = useRef<string>(""); // finalized speech text (append-only)
-  const micSessionRef = useRef<number>(0); // invalidates stale event handlers
 
   const MAX_TEXT_FILE_BYTES = 1_000_000;
   const MAX_CHARS = 60_000;
@@ -452,19 +448,14 @@ export function NizaApp() {
   useEffect(() => {
     if (!usage) return;
     const textPct = usage.text_count / usage.text_limit;
-    const imgPct = usage.image_count / usage.image_limit;
     if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
-    if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
   }, [usage?.text_count, usage?.image_count]);
 
   const plan = meQ.data?.profile.plan ?? "free";
   useEffect(() => {
     if (!usage || plan === "premium") return;
     const textBlockedNow = usage.text_count >= usage.text_limit;
-    const imgBlockedNow = usage.image_count >= usage.image_limit;
-    if (textBlockedNow && imgBlockedNow) maybeShowUpgrade("both");
-    else if (textBlockedNow) maybeShowUpgrade("text");
-    else if (imgBlockedNow) maybeShowUpgrade("image");
+    if (textBlockedNow) maybeShowUpgrade("text");
   }, [usage?.text_count, usage?.image_count, usage?.text_limit, usage?.image_limit, plan]);
 
   // ---------- Video editing (FFmpeg in the browser, saved to the conversation) ----------
@@ -556,7 +547,14 @@ export function NizaApp() {
   }
 
   async function handleSend() {
-    const text = input.trim();
+    let text = input.trim();
+    if (listening) {
+      // Stop first, transcribe once, then send exactly one message.
+      const spoken = await finishRecording();
+      text = [text, spoken].filter(Boolean).join(" ");
+      setInput(text);
+      if (!text && attachments.length === 0) return;
+    }
     if ((!text && attachments.length === 0) || sendMut.isPending || videoBusy) return;
     const vid = attachments.find((a): a is Extract<Attachment, { kind: "video" }> => a.kind === "video");
     if (vid) {
@@ -606,141 +604,88 @@ export function NizaApp() {
     // no-op: send happens via the Send button
   }
 
-  // ---------- Voice-to-text (Web Speech API) ----------
-  // Duplication-proof design:
-  //  - One SpeechRecognition instance per session (fresh resultIndex space).
-  //  - Per-session `seen` Set keyed by resultIndex; each final counted once.
-  //  - micSessionRef token invalidates stale onresult/onend from prior instances.
-  //  - Auto-restart on onend spawns a NEW instance (never restarts the old one).
-  function updateInputFromMic(interim: string) {
-    const combined = [micBaseRef.current, micFinalRef.current, interim]
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .join(" ")
-      .replace(/\s+([.,!?;:])/g, "$1")
-      .replace(/\s+/g, " ")
-      .trim();
-    setInput(combined);
+  // ---------- Voice-to-text: record -> stop -> transcribe once -> insert once ----------
+  const recorderRef = useRef<Recorder | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const [micLevel, setMicLevel] = useState(0);
+
+  useEffect(() => {
+    if (!listening) return;
+    const started = Date.now();
+    const t = setInterval(() => {
+      setRecSeconds(Math.floor((Date.now() - started) / 1000));
+      setMicLevel(recorderRef.current?.level() ?? 0);
+    }, 120);
+    return () => clearInterval(t);
+  }, [listening]);
+
+  async function transcribeFile(file: File): Promise<string> {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    fd.append("language", (navigator.language || "en").slice(0, 2));
+    const r = await fetch("/api/transcribe", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+    });
+    const j = (await r.json().catch(() => ({}))) as { text?: string; error?: string };
+    if (!r.ok) throw new Error(j.error || "Transcription failed. Please try again.");
+    return (j.text ?? "").trim();
   }
 
-  function startMicSession() {
-    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    const rec = new SR();
-    rec.lang = navigator.language || "en-US";
-    rec.interimResults = true;
-    rec.continuous = true;
-    (rec as any).maxAlternatives = 1;
-
-    const sessionId = ++micSessionRef.current;
-    const seen = new Set<number>();
-
-    rec.onresult = (e: any) => {
-      if (sessionId !== micSessionRef.current) return; // stale — ignore
-      let interim = "";
-      const start = typeof e.resultIndex === "number" ? e.resultIndex : 0;
-      for (let i = start; i < e.results.length; i++) {
-        const res = e.results[i];
-        const t = String(res[0]?.transcript ?? "");
-        if (res.isFinal) {
-          if (!seen.has(i)) {
-            seen.add(i);
-            micFinalRef.current = (micFinalRef.current + " " + t).replace(/\s+/g, " ").trim();
-          }
-        } else {
-          interim += t;
-        }
-      }
-      updateInputFromMic(interim);
-    };
-
-    rec.onerror = (ev: any) => {
-      if (ev?.error === "not-allowed" || ev?.error === "service-not-allowed") {
-        toast.error("Microphone access denied.");
-        micStopRef.current = true;
-        micSessionRef.current++;
-        setListening(false);
-      }
-      // Other errors (no-speech, aborted, network) — onend will handle restart.
-    };
-
-    rec.onend = () => {
-      if (sessionId !== micSessionRef.current) return; // stale — ignore
-      if (micStopRef.current) {
-        setListening(false);
-        return;
-      }
-      // Fresh instance so resultIndex resets cleanly. No re-emission of old finals.
-      startMicSession();
-    };
-
-    recognitionRef.current = rec;
+  /** Stops recording and returns the final transcript (empty on failure). */
+  async function finishRecording(): Promise<string> {
+    const rec = recorderRef.current;
+    recorderRef.current = null;
+    setListening(false);
+    if (!rec) return "";
+    setTranscribing(true);
     try {
-      rec.start();
-    } catch {
-      // Rapid toggle can throw "already started" — safe to ignore; onend restarts.
+      const file = await rec.stop();
+      return await transcribeFile(file);
+    } catch (e) {
+      toast.error((e as Error).message || "Transcription failed.");
+      return "";
+    } finally {
+      setTranscribing(false);
     }
   }
 
-  function stopMicNow() {
-    micStopRef.current = true;
-    micSessionRef.current++; // invalidate any in-flight onresult/onend
+  function cancelRecording() {
+    recorderRef.current?.cancel();
+    recorderRef.current = null;
     setListening(false);
-    const rec = recognitionRef.current;
-    recognitionRef.current = null;
-    if (!rec) return;
-    try {
-      rec.onend = null;
-      rec.onresult = null;
-      rec.onerror = null;
-    } catch {}
-    try {
-      rec.abort();
-    } catch {}
-    try {
-      rec.stop();
-    } catch {}
   }
 
-  function toggleMic() {
-    if (typeof window === "undefined") return;
-    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
+  async function toggleMic() {
+    if (typeof window === "undefined" || transcribing) return;
+    if (listening) {
+      const text = await finishRecording();
+      if (text) setInput((cur) => [cur.trim(), text].filter(Boolean).join(" "));
+      setTimeout(() => inputRef.current?.focus(), 0);
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
       toast.error("Voice input isn't supported in this browser.");
       return;
     }
-    if (listening) {
-      stopMicNow();
-      return;
+    try {
+      recorderRef.current = await startRecording();
+      setRecSeconds(0);
+      setListening(true);
+    } catch (e: any) {
+      toast.error(
+        e?.name === "NotAllowedError"
+          ? "Microphone access was denied. Allow it in your browser settings."
+          : "Could not start the microphone.",
+      );
     }
-    micStopRef.current = false;
-    micBaseRef.current = input.trim();
-    micFinalRef.current = "";
-    setListening(true);
-    startMicSession();
   }
 
-  useEffect(
-    () => () => {
-      micStopRef.current = true;
-      micSessionRef.current++;
-      const rec = recognitionRef.current;
-      recognitionRef.current = null;
-      if (!rec) return;
-      try {
-        rec.onend = null;
-        rec.onresult = null;
-        rec.onerror = null;
-      } catch {}
-      try {
-        rec.abort();
-      } catch {}
-      try {
-        rec.stop();
-      } catch {}
-    },
-    [],
-  );
+  useEffect(() => () => recorderRef.current?.cancel(), []);
 
   const textPct = usage
     ? Math.min(100, Math.round((usage.text_count / usage.text_limit) * 100))
@@ -749,7 +694,7 @@ export function NizaApp() {
     ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100))
     : 0;
   const textBlocked = !!usage && usage.text_count >= usage.text_limit;
-  const imgBlocked = !!usage && usage.image_count >= usage.image_limit;
+  const imgBlocked = false; // image availability is decided by the user's Puter account
   const inputBlocked = textBlocked && imgBlocked;
 
   function barColor(pct: number) {
@@ -811,7 +756,12 @@ export function NizaApp() {
                 <ChatMessage
                   key={m.id}
                   message={m}
-                  onRegenerate={(id) => regenMut.mutate(id)}
+                  onRegenerate={(id) => {
+                    const msg = messages.find((x) => x.id === id);
+                    if (msg?.media_model?.startsWith("puter") && msg.media_prompt && activeId) {
+                      void runPuterImage(id, msg.media_prompt, msg.media_model.split(":")[1] || "1:1", activeId);
+                    } else regenMut.mutate(id);
+                  }}
                   regenerating={regenMut.isPending && regenMut.variables === m.id}
                   imageGenerating={generatingIds.has(m.id)}
                   onRetryImage={(msg) =>
@@ -965,7 +915,7 @@ export function NizaApp() {
               <button
                 onClick={handleSend}
                 disabled={
-                  sendMut.isPending || (!input.trim() && attachments.length === 0) || inputBlocked
+                  sendMut.isPending || transcribing || (!listening && !input.trim() && attachments.length === 0) || inputBlocked
                 }
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition disabled:opacity-40 hover:opacity-90"
                 aria-label="Send"
@@ -974,14 +924,31 @@ export function NizaApp() {
               </button>
             </div>
             {listening && (
-              <div className="mt-2 flex items-center justify-center gap-1" aria-hidden>
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                <span className="h-2 w-2 animate-pulse rounded-full bg-primary [animation-delay:150ms]" />
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary [animation-delay:300ms]" />
-                <span className="h-2 w-2 animate-pulse rounded-full bg-primary [animation-delay:450ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:600ms]" />
-                <span className="ml-2 text-[11px] text-muted-foreground">Listening…</span>
+              <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2">
+                <button
+                  onClick={cancelRecording}
+                  aria-label="Cancel recording"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <div className="flex flex-1 items-center gap-0.5" aria-hidden>
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <span
+                      key={i}
+                      className="w-1 rounded-full bg-primary transition-all"
+                      style={{ height: `${4 + Math.round(micLevel * 22 * (0.4 + 0.6 * Math.abs(Math.sin(i * 1.7 + recSeconds))))}px` }}
+                    />
+                  ))}
+                </div>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {Math.floor(recSeconds / 60)}:{String(recSeconds % 60).padStart(2, "0")}
+                </span>
+                <span className="text-[11px] text-muted-foreground">Tap mic to stop</span>
               </div>
+            )}
+            {transcribing && (
+              <div className="mt-2 text-center text-[11px] text-muted-foreground">Transcribing…</div>
             )}
           </div>
         </div>

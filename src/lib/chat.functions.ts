@@ -448,7 +448,7 @@ export const sendMessage = createServerFn({ method: "POST" })
     const isMusic = route.mode === "MUSIC_SHORT" || route.mode === "MUSIC_SONG";
     const isMedia = isImage || isMusic;
 
-    if (isMedia && !isAdmin && usage.image_count >= usage.image_limit) {
+    if (isMedia && route.mode !== "IMAGE_GEN" && !isAdmin && usage.image_count >= usage.image_limit) {
       return {
         ok: false,
         kind: "limit" as const,
@@ -874,7 +874,11 @@ export const completePuterImage = createServerFn({ method: "POST" })
     if (error) return { ok: false as const, message: "Could not save the image. Please retry." };
     await supabase
       .from("messages")
-      .update({ image_url: path, content: "Here's your image:", media_model: "puter" })
+      .update({
+        image_url: path,
+        content: "Here's your image:",
+        media_model: `puter:${String(msg.media_model ?? "").split(":")[1] || "1:1"}`,
+      })
       .eq("id", data.messageId);
     return { ok: true as const };
   });
