@@ -302,7 +302,6 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
           <div className="border-t border-border px-3 py-2.5 text-xs">
             <div className="mb-1.5 font-medium text-muted-foreground">Credits</div>
             <UsageRow label="chats" used={usage.text_count} limit={usage.text_limit} />
-            <UsageRow label="images" used={usage.image_count} limit={usage.image_limit} />
           </div>
         )}
 

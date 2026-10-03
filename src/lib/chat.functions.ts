@@ -448,7 +448,7 @@ export const sendMessage = createServerFn({ method: "POST" })
     const isMusic = route.mode === "MUSIC_SHORT" || route.mode === "MUSIC_SONG";
     const isMedia = isImage || isMusic;
 
-    if (isMedia && !isAdmin && usage.image_count >= usage.image_limit) {
+    if (isMedia && route.mode !== "IMAGE_GEN" && !isAdmin && usage.image_count >= usage.image_limit) {
       return {
         ok: false,
         kind: "limit" as const,

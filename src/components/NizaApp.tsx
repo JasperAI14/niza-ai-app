@@ -454,7 +454,6 @@ export function NizaApp() {
     const textPct = usage.text_count / usage.text_limit;
     const imgPct = usage.image_count / usage.image_limit;
     if (textPct >= 0.9 && textPct < 1) toast.warning(`Text usage at ${Math.round(textPct * 100)}%`);
-    if (imgPct >= 0.9 && imgPct < 1) toast.warning(`Image usage at ${Math.round(imgPct * 100)}%`);
   }, [usage?.text_count, usage?.image_count]);
 
   const plan = meQ.data?.profile.plan ?? "free";
@@ -749,7 +748,7 @@ export function NizaApp() {
     ? Math.min(100, Math.round((usage.image_count / usage.image_limit) * 100))
     : 0;
   const textBlocked = !!usage && usage.text_count >= usage.text_limit;
-  const imgBlocked = !!usage && usage.image_count >= usage.image_limit;
+  const imgBlocked = false; // image availability is decided by the user's Puter account
   const inputBlocked = textBlocked && imgBlocked;
 
   function barColor(pct: number) {
@@ -811,7 +810,12 @@ export function NizaApp() {
                 <ChatMessage
                   key={m.id}
                   message={m}
-                  onRegenerate={(id) => regenMut.mutate(id)}
+                  onRegenerate={(id) => {
+                    const msg = messages.find((x) => x.id === id);
+                    if (msg?.media_model?.startsWith("puter") && msg.media_prompt && activeId) {
+                      void runPuterImage(id, msg.media_prompt, msg.media_model.split(":")[1] || "1:1", activeId);
+                    } else regenMut.mutate(id);
+                  }}
                   regenerating={regenMut.isPending && regenMut.variables === m.id}
                   imageGenerating={generatingIds.has(m.id)}
                   onRetryImage={(msg) =>
