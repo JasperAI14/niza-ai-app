@@ -1201,7 +1201,7 @@ export function NizaApp() {
               <button
                 onClick={handleSend}
                 disabled={
-                  sendMut.isPending || (!input.trim() && attachments.length === 0) || inputBlocked
+                  sendMut.isPending || transcribing || (!listening && !input.trim() && attachments.length === 0) || inputBlocked
                 }
                 className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground transition disabled:opacity-40 hover:opacity-90"
                 aria-label="Send"
@@ -1210,14 +1210,31 @@ export function NizaApp() {
               </button>
             </div>
             {listening && (
-              <div className="mt-2 flex items-center justify-center gap-1" aria-hidden>
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                <span className="h-2 w-2 animate-pulse rounded-full bg-primary [animation-delay:150ms]" />
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-primary [animation-delay:300ms]" />
-                <span className="h-2 w-2 animate-pulse rounded-full bg-primary [animation-delay:450ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:600ms]" />
-                <span className="ml-2 text-[11px] text-muted-foreground">Listening…</span>
+              <div className="mt-2 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2">
+                <button
+                  onClick={cancelRecording}
+                  aria-label="Cancel recording"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <div className="flex flex-1 items-center gap-0.5" aria-hidden>
+                  {Array.from({ length: 24 }).map((_, i) => (
+                    <span
+                      key={i}
+                      className="w-1 rounded-full bg-primary transition-all"
+                      style={{ height: `${4 + Math.round(micLevel * 22 * (0.4 + 0.6 * Math.abs(Math.sin(i * 1.7 + recSeconds))))}px` }}
+                    />
+                  ))}
+                </div>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {Math.floor(recSeconds / 60)}:{String(recSeconds % 60).padStart(2, "0")}
+                </span>
+                <span className="text-[11px] text-muted-foreground">Tap mic to stop</span>
               </div>
+            )}
+            {transcribing && (
+              <div className="mt-2 text-center text-[11px] text-muted-foreground">Transcribing…</div>
             )}
           </div>
         </div>
