@@ -66,6 +66,7 @@ export const Route = createFileRoute("/api/public/paystack/webhook")({
                 subscriptionCode: event?.data?.plan?.plan_code ? event?.data?.plan?.plan_code : null,
                 amountKobo: event?.data?.amount ?? null,
                 reference: event?.data?.reference ?? "",
+                tier: event?.data?.metadata?.tier,
                 rawEvent: event,
               });
               break;

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { PLANS, isPlanTier, type PlanTier } from "./plans";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -60,7 +61,7 @@ export const getPaystackStatus = createServerFn({ method: "GET" })
       secretMasked: secret ? `${secret.slice(0, 8)}…${secret.slice(-4)}` : null,
       publicMasked: publicKey ? `${publicKey.slice(0, 8)}…${publicKey.slice(-4)}` : null,
       planCode: settings?.paystack_plan_code ?? null,
-      planAmountKobo: settings?.paystack_plan_amount_kobo ?? 500000,
+      planAmountKobo: settings?.paystack_plan_amount_kobo ?? PLANS.total.amountKobo,
       updatedAt: settings?.updated_at ?? null,
     };
   });
@@ -103,7 +104,7 @@ export const createOrRefreshPremiumPlan = createServerFn({ method: "POST" })
       .eq("id", true)
       .maybeSingle();
 
-    const amount = existing?.paystack_plan_amount_kobo ?? 500000; // ₦5,000
+    const amount = existing?.paystack_plan_amount_kobo ?? PLANS.total.amountKobo;
 
     // If we already have a plan_code, verify it exists on Paystack
     if (existing?.paystack_plan_code) {
@@ -145,20 +146,21 @@ export const getMyPremiumStatus = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data } = await context.supabase
       .from("profiles")
-      .select("plan, plan_status, plan_expires_at")
+      .select("plan, plan_status, plan_expires_at, premium_tier")
       .eq("id", context.userId)
       .maybeSingle();
     return {
       plan: (data?.plan ?? "free") as "free" | "premium",
       status: (data?.plan_status ?? "inactive") as string,
       expiresAt: (data?.plan_expires_at ?? null) as string | null,
+      tier: (data?.premium_tier ?? null) as string | null,
     };
   });
 
 // ---------- USER: initialize checkout ----------
 export const initializePremiumCheckout = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ callbackUrl: z.string().url() }).parse(d))
+  .inputValidator((d) => z.object({ callbackUrl: z.string().url(), tier: z.enum(["total", "chat", "images", "video"]).default("total") }).parse(d))
   .handler(async ({ data, context }) => {
     if (!getSecretKey()) {
       return { ok: false as const, message: "Payments are not yet configured. Please contact support." };
@@ -170,17 +172,16 @@ export const initializePremiumCheckout = createServerFn({ method: "POST" })
     ]);
     if (!profile?.email) return { ok: false as const, message: "Your account is missing an email address." };
 
+    const plan = PLANS[data.tier];
+    // Amount is always decided on the server from the selected plan.
     const body: Record<string, unknown> = {
       email: profile.email,
       callback_url: data.callbackUrl,
-      metadata: { user_id: context.userId, purpose: "premium_subscription" },
+      amount: plan.amountKobo,
+      currency: "NGN",
+      metadata: { user_id: context.userId, purpose: "premium_subscription", tier: data.tier },
     };
-    if (settings?.paystack_plan_code) {
-      body.plan = settings.paystack_plan_code;
-    } else {
-      body.amount = settings?.paystack_plan_amount_kobo ?? 500000;
-      body.currency = "NGN";
-    }
+    void settings;
 
     const r = await paystackFetch("/transaction/initialize", {
       method: "POST",
@@ -217,6 +218,7 @@ export const verifyPremiumPayment = createServerFn({ method: "POST" })
       subscriptionCode: null,
       amountKobo: payload?.amount ?? null,
       reference: payload?.reference ?? data.reference,
+      tier: payload?.metadata?.tier,
       rawEvent: payload,
     });
     return { ok: true as const, message: "Premium activated." };
@@ -229,8 +231,15 @@ export async function activatePremium(opts: {
   subscriptionCode: string | null;
   amountKobo: number | null;
   reference: string;
+  tier?: unknown;
   rawEvent: unknown;
 }) {
+  const tier: PlanTier = isPlanTier(opts.tier) ? opts.tier : "total";
+  // Reject underpayments: the paid amount must cover the plan price.
+  if (opts.amountKobo != null && opts.amountKobo < PLANS[tier].amountKobo) {
+    console.error("[activatePremium] amount below plan price", tier, opts.amountKobo);
+    return;
+  }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   // Idempotency: if we've already activated for this reference, do nothing.
@@ -259,6 +268,7 @@ export async function activatePremium(opts: {
       plan: "premium",
       plan_status: "active",
       plan_expires_at: expires.toISOString(),
+      premium_tier: tier,
       ...(opts.customerCode ? { paystack_customer_code: opts.customerCode } : {}),
       ...(opts.subscriptionCode ? { paystack_subscription_code: opts.subscriptionCode } : {}),
     })
