@@ -1,20 +1,20 @@
-# Niza Prime AI — Part A roadmap
+# Niza Prime AI — Part A roadmap (updated workflow, Oct 4)
 
-Source of truth: the "Master Implementation Plan — Part A" message. Work in order.
+Work strictly in this order.
 
-## Done (built, typecheck clean; not yet verified end-to-end)
-- [x] 1. Image: compact square placeholder, natural-ratio compact final image, Puter migration (user-linked account verified server-side), failure + Retry on same message, Regenerate via Puter, fixed image allowance removed from sidebar/warnings/gating
-- [x] 2. Speech-to-text: record -> stop -> transcribe once (/api/transcribe) -> insert once; Send while recording; Cancel discards; mic-denied handling
-- [x] Video editing: uploads up to 500MB, FFmpeg in-browser edit saved to conversation
+## Earlier work (built; not verified signed-in)
+- [x] Images via user's Puter account, compact placeholder, Retry
+- [x] Speech-to-text single transcript
+- [x] In-browser video editing
 
-## Next (exact resume point)
-- [ ] 1 leftover: image EDIT still on old provider; docs text about images
-- [ ] 3. Router audit (Smart Copy, Code Box, image, web, URL research, video edit; remove music routes)
-- [ ] 4. Long-press menus (user: Pin/Copy/Edit/Share/Details; AI: Copy/Share/Pin/Details)
-- [ ] 5. Auth redesign + onboarding + Google Drive storage
-- [ ] 6. Promo code system (admin CRUD, secure redemption, rewards)
-- [ ] 7. Settings (language/accent persistence, Clear All with 10-day recovery, Archive)
-- [ ] 8. Premium plans + Paystack (₦7,000 / ₦2,500 / ₦2,500 / ₦2,000)
-- [ ] 9. Web search (Tavily, Gemini YouTube), URL research, video editing stabilization — blocked on TAVILY_API_KEY and GEMINI_API_KEY
-- [ ] 10. Docs cleanup, remove music references, migrate + delete 3 old plan files
-- [ ] 11. Final end-to-end verification
+## Updated Part A
+- [x] 1. Router audit — music routes removed from rules, classifier, clarifier, feature list
+- [x] 2. Billing — 4 plans (₦7,000 / ₦2,500 / ₦2,500 / ₦2,000), server-set amounts, plan picker → review → Paystack, tier saved on profile, underpayment rejected
+- [ ] 2b. Per-tier limits (chat vs images vs video) enforced in quota checks — currently any paid tier = premium
+- [ ] 3. Mobile long-press menus (user: Pin/Copy/Edit/Share/Details; AI: Copy/Share/Pin/Details)
+- [ ] 4. Auth redesign + onboarding (Account → Invitation → Promo → Privacy/Terms → Drive → Tutorial)
+- [ ] 5. Promo code page + admin system
+- [ ] 6. Settings overhaul (persistence, Clear All 10-day recovery, Archive)
+- [ ] 7. Firebase Auth + FCM web push + public landing page at / + full /privacy page
+- [ ] 8. Cleanup (music UI/docs/about page, old plan files) + final verification
+- Blocked: web search needs TAVILY_API_KEY + GEMINI_API_KEY
