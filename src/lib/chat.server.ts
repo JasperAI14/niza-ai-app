@@ -360,16 +360,16 @@ export type RouteDecision = {
 };
 
 const AMBIGUOUS =
-  /\b(image|picture|photo|art|artwork|logo|poster|wallpaper|visual|song|music|track|beat|melody|tune|jingle|instrumental|draw|paint|illustrat|render)\w*\b/i;
+  /\b(image|picture|photo|art|artwork|logo|poster|wallpaper|visual|draw|paint|illustrat|render)\w*\b/i;
 
 const CODE_HINT =
   /\b(code|function|bug|error|stack\s*trace|compile|refactor|api|sql|regex|typescript|javascript|python|java|rust|golang|css|html|component|debug)\b/i;
 
 async function routeWithModel(text: string): Promise<RouteMode | null> {
   const instruction = `Classify the user request into exactly one label and reply with the label only.
-Labels: CHAT, CODE, IMAGE_GEN, MUSIC_SHORT, MUSIC_SONG, WEB_SEARCH.
+Labels: CHAT, CODE, IMAGE_GEN, WEB_SEARCH.
+Music or song generation is not offered: classify those as CHAT.
 IMAGE_GEN only when the user wants a NEW picture created.
-MUSIC_SONG when they want a song with lyrics or vocals; MUSIC_SHORT for instrumentals, beats or melodies.
 CODE when they want code written, explained, reviewed or debugged.
 WEB_SEARCH when the answer depends on current, real-world, time-sensitive information.
 Otherwise CHAT.
@@ -382,7 +382,7 @@ Request: ${text.slice(0, 600)}`;
   for (const attempt of attempts) {
     try {
       const raw = (await attempt()).toUpperCase();
-      const found = (["IMAGE_GEN", "MUSIC_SONG", "MUSIC_SHORT", "WEB_SEARCH", "CODE", "CHAT"] as RouteMode[]).find(
+      const found = (["IMAGE_GEN", "WEB_SEARCH", "CODE", "CHAT"] as RouteMode[]).find(
         (l) => raw.includes(l),
       );
       if (found) return found;
