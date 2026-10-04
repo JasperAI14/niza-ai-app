@@ -67,7 +67,6 @@ export const FEATURES: FeatureEntry[] = [
   { name: "Image ratios", what: "Chooses the shape of a generated picture: square, portrait, tall, landscape or wide.", where: "The ratio picker just above the message box." },
   { name: "Image editing", what: "Background changes, object changes, style changes, touch-ups.", where: "Upload a picture with the plus button, or open a generated image and choose Edit, then describe the change." },
   { name: "Image analysis", what: "Reads and describes an uploaded picture, including text inside it.", where: "Attach the picture with the plus button and ask your question." },
-  { name: "Music", what: "Short instrumental pieces and full songs.", where: "Ask for it in chat, or open the Music workspace from the left panel." },
   { name: "Smart Copy", what: "Collapses reusable output — code, emails, essays, plans — into a card you can copy or download.", where: "Appears automatically on that kind of response." },
   { name: "Code blocks", what: "Syntax-highlighted code with copy, download and live preview for HTML, CSS and JavaScript.", where: "Appears automatically in answers containing code." },
   { name: "Speech to text", what: "Dictate a message instead of typing it.", where: "The microphone button beside the message box. Stop puts the text in the box for review; Send sends it." },
@@ -80,7 +79,7 @@ export const FEATURES: FeatureEntry[] = [
   { name: "Feedback and reviews", what: "Rate the app and leave a review.", where: "Profile then Send Feedback." },
   { name: "Theme", what: "Dark or light mode, plus an accent colour. The two are independent.", where: "Profile then Settings." },
   { name: "Sign out", what: "Ends your session on this device.", where: "Profile, then Sign Out at the bottom." },
-  { name: "Premium", what: "Higher text and image limits, no watermark, no waiting delay.", where: "The upgrade prompt when a limit is reached, or Profile then Upgrade." },
+  { name: "Premium", what: "Plans: Total Premium ₦7,000, Chat Premium ₦2,500, Images ₦2,500, Video Editing ₦2,000 per month. Higher limits, no watermark, no waiting delay.", where: "The upgrade prompt when a limit is reached, or Profile then Upgrade." },
   { name: "NizaHub", what: "The account, sign-in, subscription and payment platform behind your Niza Prime AI account.", where: "Sign-in and subscription screens are handled through it automatically." },
   { name: "Administrator tools", what: "Reviews, support requests, error reports and payments dashboards for administrators only.", where: "Profile then the Admin section, visible only to administrators." },
 ];
@@ -96,22 +95,6 @@ type ModeRule = {
 };
 
 const RULES: ModeRule[] = [
-  {
-    mode: "MUSIC_SONG",
-    strong: [
-      /\b(write|make|create|compose|generate|produce|sing)\b[^.?!]{0,40}\b(song|anthem|hymn|ballad)\b/i,
-      /\b(song|track)\b[^.?!]{0,30}\b(with (vocals|words|lyrics)|that sings)\b/i,
-    ],
-    block: [/\b(lyrics|words)\s+(only|just)\b/i, /^\s*write\s+(me\s+)?(the\s+)?lyrics\b/i],
-  },
-  {
-    mode: "MUSIC_SHORT",
-    strong: [
-      /\b(make|create|generate|compose|produce|give me)\b[^.?!]{0,40}\b(instrumental|beat|melody|loop|riff|jingle|background music|soundtrack)\b/i,
-      /\b(make|create|generate|compose)\b[^.?!]{0,30}\b(music|tune|track)\b/i,
-    ],
-    block: [/\b(lyrics|words)\s+(only|just)\b/i, /\brecommend\b/i, /\bplaylist\b/i],
-  },
   {
     mode: "IMAGE_GEN",
     strong: [
@@ -212,12 +195,6 @@ export function buildClarification(text: string, turn = 0): { question: string; 
   }
   if (/^(fix|debug|explain|review|check|analy[sz]e|improve|continue)\s+(this|that|it)$/i.test(t)) {
     return { question: "Happy to — paste the code or text you're referring to.", options: [] };
-  }
-  if (/^(create|make|generate|compose|write)\s+(me\s+)?(a\s+|an\s+|some\s+)?(music|song)$/i.test(t)) {
-    return {
-      question: "What mood or style should it have, and should it have vocals?",
-      options: ["Calm piano instrumental", "Upbeat afrobeats track", "A song with vocals"],
-    };
   }
   if (/^(create|make|generate|draw)\s+(me\s+)?(a\s+|an\s+)?(image|picture|photo|logo|design)$/i.test(t)) {
     return { question: "What should the picture show?", options: [] };

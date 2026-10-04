@@ -43,7 +43,6 @@ import {
 } from "@/lib/video-edit";
 import { supabase } from "@/integrations/supabase/client";
 import { startRecording, type Recorder } from "@/lib/record-wav";
-import { detectMusicRequest } from "@/lib/intent";
 import { ChatMessage, type UIMessage } from "./ChatMessage";
 import { UpgradeInlineBanner } from "./UpgradeModal";
 import { BrandLogo } from "./BrandLogo";
@@ -367,7 +366,7 @@ export function NizaApp() {
         tid = t.id;
       }
       const hasImages = payload.images.length > 0;
-      const isMusic = !hasImages && !!detectMusicRequest(payload.content);
+      const isMusic = false; // music generation permanently removed
       const looksImage =
         payload.isEdit ||
         (!hasImages &&

@@ -326,6 +326,7 @@ export type Database = {
           plan: string
           plan_expires_at: string | null
           plan_status: string
+          premium_tier: string | null
           promo_used: boolean
           puter_linked_at: string | null
           puter_username: string | null
@@ -343,6 +344,7 @@ export type Database = {
           plan?: string
           plan_expires_at?: string | null
           plan_status?: string
+          premium_tier?: string | null
           promo_used?: boolean
           puter_linked_at?: string | null
           puter_username?: string | null
@@ -360,6 +362,7 @@ export type Database = {
           plan?: string
           plan_expires_at?: string | null
           plan_status?: string
+          premium_tier?: string | null
           promo_used?: boolean
           puter_linked_at?: string | null
           puter_username?: string | null
