@@ -94,19 +94,23 @@ export function isReusableContent(text: string): boolean {
   return false;
 }
 
-// Stricter: should this response be surfaced as a collapsed "copy card"
-// (ChatGPT-style expandable block) instead of a normal chat bubble?
-export function shouldUseCopyCard(text: string): boolean {
-  if (!text) return false;
-  if (/```[\s\S]*?```/.test(text)) return true; // any code block
-  if (text.length >= 500) return true;
-  const lines = text.split("\n");
-  const listy = lines.filter((l) => /^\s*(?:[-*+]\s|\d+\.\s)/.test(l)).length;
-  if (listy >= 4) return true;
-  // multi-heading guide
-  const headings = lines.filter((l) => /^#{1,3}\s/.test(l)).length;
-  if (headings >= 2) return true;
-  return false;
+// Router: did the USER ask for reusable, copy-out content (email, essay, post,
+// letter, prompt, resume, script…)? Smart Copy is driven by request intent,
+// never by response length — ordinary chat always renders as a normal reply.
+const REUSABLE_REQUEST =
+  /\b(write|draft|compose|create|generate|make|prepare|give\s+me|rewrite|craft)\b[\s\S]{0,40}?\b(email|e-mail|letter|cover\s+letter|essay|article|blog(?:\s+post)?|post|caption|tweet|thread|speech|script|story|poem|prompt|resume|cv|proposal|bio|description|ad\s+copy|copy|announcement|press\s+release|template|message|statement|report|summary|outline|newsletter)\b/i;
+
+export function wantsReusableContent(prompt?: string | null): boolean {
+  if (!prompt) return false;
+  return REUSABLE_REQUEST.test(prompt);
+}
+
+// Smart Copy card only when the user asked for reusable content AND the reply
+// isn't code (code renders in the Code Box with Copy / Live Preview / Share).
+export function shouldUseCopyCard(text: string, prompt?: string | null): boolean {
+  if (!text || !wantsReusableContent(prompt)) return false;
+  if (/```/.test(text)) return false;
+  return text.trim().length >= 120;
 }
 
 export function copyCardTitle(text: string): "Code" | "Guide" | "Prompt" | "Writing" {
