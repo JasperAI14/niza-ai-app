@@ -17,11 +17,13 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile.index'
+import { Route as OauthGoogleDriveReturnRouteImport } from './routes/oauth.google-drive.return'
 import { Route as AuthenticatedUpgradeCallbackRouteImport } from './routes/_authenticated/upgrade.callback'
 import { Route as AuthenticatedProfileSupportRouteImport } from './routes/_authenticated/profile.support'
 import { Route as AuthenticatedProfilePrivacyRouteImport } from './routes/_authenticated/profile.privacy'
 import { Route as AuthenticatedProfilePersonalRouteImport } from './routes/_authenticated/profile.personal'
 import { Route as AuthenticatedProfileFeedbackRouteImport } from './routes/_authenticated/profile.feedback'
+import { Route as AuthenticatedProfileDriveRouteImport } from './routes/_authenticated/profile.drive'
 import { Route as AuthenticatedProfileAboutRouteImport } from './routes/_authenticated/profile.about'
 import { Route as AuthenticatedAdminSupportRouteImport } from './routes/_authenticated/admin.support'
 import { Route as AuthenticatedAdminReviewsRouteImport } from './routes/_authenticated/admin.reviews'
@@ -71,6 +73,11 @@ const AuthenticatedProfileIndexRoute =
     path: '/profile/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const OauthGoogleDriveReturnRoute = OauthGoogleDriveReturnRouteImport.update({
+  id: '/oauth/google-drive/return',
+  path: '/oauth/google-drive/return',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedUpgradeCallbackRoute =
   AuthenticatedUpgradeCallbackRouteImport.update({
     id: '/upgrade/callback',
@@ -99,6 +106,12 @@ const AuthenticatedProfileFeedbackRoute =
   AuthenticatedProfileFeedbackRouteImport.update({
     id: '/profile/feedback',
     path: '/profile/feedback',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedProfileDriveRoute =
+  AuthenticatedProfileDriveRouteImport.update({
+    id: '/profile/drive',
+    path: '/profile/drive',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedProfileAboutRoute =
@@ -162,11 +175,13 @@ export interface FileRoutesByFullPath {
   '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/profile/about': typeof AuthenticatedProfileAboutRoute
+  '/profile/drive': typeof AuthenticatedProfileDriveRoute
   '/profile/feedback': typeof AuthenticatedProfileFeedbackRoute
   '/profile/personal': typeof AuthenticatedProfilePersonalRoute
   '/profile/privacy': typeof AuthenticatedProfilePrivacyRoute
   '/profile/support': typeof AuthenticatedProfileSupportRoute
   '/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
+  '/oauth/google-drive/return': typeof OauthGoogleDriveReturnRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
@@ -184,11 +199,13 @@ export interface FileRoutesByTo {
   '/admin/reviews': typeof AuthenticatedAdminReviewsRoute
   '/admin/support': typeof AuthenticatedAdminSupportRoute
   '/profile/about': typeof AuthenticatedProfileAboutRoute
+  '/profile/drive': typeof AuthenticatedProfileDriveRoute
   '/profile/feedback': typeof AuthenticatedProfileFeedbackRoute
   '/profile/personal': typeof AuthenticatedProfilePersonalRoute
   '/profile/privacy': typeof AuthenticatedProfilePrivacyRoute
   '/profile/support': typeof AuthenticatedProfileSupportRoute
   '/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
+  '/oauth/google-drive/return': typeof OauthGoogleDriveReturnRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
@@ -208,11 +225,13 @@ export interface FileRoutesById {
   '/_authenticated/admin/reviews': typeof AuthenticatedAdminReviewsRoute
   '/_authenticated/admin/support': typeof AuthenticatedAdminSupportRoute
   '/_authenticated/profile/about': typeof AuthenticatedProfileAboutRoute
+  '/_authenticated/profile/drive': typeof AuthenticatedProfileDriveRoute
   '/_authenticated/profile/feedback': typeof AuthenticatedProfileFeedbackRoute
   '/_authenticated/profile/personal': typeof AuthenticatedProfilePersonalRoute
   '/_authenticated/profile/privacy': typeof AuthenticatedProfilePrivacyRoute
   '/_authenticated/profile/support': typeof AuthenticatedProfileSupportRoute
   '/_authenticated/upgrade/callback': typeof AuthenticatedUpgradeCallbackRoute
+  '/oauth/google-drive/return': typeof OauthGoogleDriveReturnRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/api/public/novahub/webhook': typeof ApiPublicNovahubWebhookRoute
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
@@ -232,11 +251,13 @@ export interface FileRouteTypes {
     | '/admin/reviews'
     | '/admin/support'
     | '/profile/about'
+    | '/profile/drive'
     | '/profile/feedback'
     | '/profile/personal'
     | '/profile/privacy'
     | '/profile/support'
     | '/upgrade/callback'
+    | '/oauth/google-drive/return'
     | '/profile/'
     | '/api/public/novahub/webhook'
     | '/api/public/paystack/webhook'
@@ -254,11 +275,13 @@ export interface FileRouteTypes {
     | '/admin/reviews'
     | '/admin/support'
     | '/profile/about'
+    | '/profile/drive'
     | '/profile/feedback'
     | '/profile/personal'
     | '/profile/privacy'
     | '/profile/support'
     | '/upgrade/callback'
+    | '/oauth/google-drive/return'
     | '/profile'
     | '/api/public/novahub/webhook'
     | '/api/public/paystack/webhook'
@@ -277,11 +300,13 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/reviews'
     | '/_authenticated/admin/support'
     | '/_authenticated/profile/about'
+    | '/_authenticated/profile/drive'
     | '/_authenticated/profile/feedback'
     | '/_authenticated/profile/personal'
     | '/_authenticated/profile/privacy'
     | '/_authenticated/profile/support'
     | '/_authenticated/upgrade/callback'
+    | '/oauth/google-drive/return'
     | '/_authenticated/profile/'
     | '/api/public/novahub/webhook'
     | '/api/public/paystack/webhook'
@@ -294,6 +319,7 @@ export interface RootRouteChildren {
   HelpRoute: typeof HelpRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ApiTranscribeRoute: typeof ApiTranscribeRoute
+  OauthGoogleDriveReturnRoute: typeof OauthGoogleDriveReturnRoute
   ApiPublicNovahubWebhookRoute: typeof ApiPublicNovahubWebhookRoute
   ApiPublicPaystackWebhookRoute: typeof ApiPublicPaystackWebhookRoute
 }
@@ -356,6 +382,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/oauth/google-drive/return': {
+      id: '/oauth/google-drive/return'
+      path: '/oauth/google-drive/return'
+      fullPath: '/oauth/google-drive/return'
+      preLoaderRoute: typeof OauthGoogleDriveReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/upgrade/callback': {
       id: '/_authenticated/upgrade/callback'
       path: '/upgrade/callback'
@@ -389,6 +422,13 @@ declare module '@tanstack/react-router' {
       path: '/profile/feedback'
       fullPath: '/profile/feedback'
       preLoaderRoute: typeof AuthenticatedProfileFeedbackRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/profile/drive': {
+      id: '/_authenticated/profile/drive'
+      path: '/profile/drive'
+      fullPath: '/profile/drive'
+      preLoaderRoute: typeof AuthenticatedProfileDriveRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile/about': {
@@ -458,6 +498,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminReviewsRoute: typeof AuthenticatedAdminReviewsRoute
   AuthenticatedAdminSupportRoute: typeof AuthenticatedAdminSupportRoute
   AuthenticatedProfileAboutRoute: typeof AuthenticatedProfileAboutRoute
+  AuthenticatedProfileDriveRoute: typeof AuthenticatedProfileDriveRoute
   AuthenticatedProfileFeedbackRoute: typeof AuthenticatedProfileFeedbackRoute
   AuthenticatedProfilePersonalRoute: typeof AuthenticatedProfilePersonalRoute
   AuthenticatedProfilePrivacyRoute: typeof AuthenticatedProfilePrivacyRoute
@@ -474,6 +515,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminReviewsRoute: AuthenticatedAdminReviewsRoute,
   AuthenticatedAdminSupportRoute: AuthenticatedAdminSupportRoute,
   AuthenticatedProfileAboutRoute: AuthenticatedProfileAboutRoute,
+  AuthenticatedProfileDriveRoute: AuthenticatedProfileDriveRoute,
   AuthenticatedProfileFeedbackRoute: AuthenticatedProfileFeedbackRoute,
   AuthenticatedProfilePersonalRoute: AuthenticatedProfilePersonalRoute,
   AuthenticatedProfilePrivacyRoute: AuthenticatedProfilePrivacyRoute,
@@ -492,6 +534,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpRoute: HelpRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiTranscribeRoute: ApiTranscribeRoute,
+  OauthGoogleDriveReturnRoute: OauthGoogleDriveReturnRoute,
   ApiPublicNovahubWebhookRoute: ApiPublicNovahubWebhookRoute,
   ApiPublicPaystackWebhookRoute: ApiPublicPaystackWebhookRoute,
 }

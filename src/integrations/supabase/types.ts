@@ -38,6 +38,42 @@ export type Database = {
         }
         Relationships: []
       }
+      app_user_connections: {
+        Row: {
+          account_email: string | null
+          connection_key_ciphertext: string
+          connector_id: string
+          created_at: string
+          folder_id: string | null
+          id: string
+          reconnect_required: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_email?: string | null
+          connection_key_ciphertext: string
+          connector_id: string
+          created_at?: string
+          folder_id?: string | null
+          id?: string
+          reconnect_required?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_email?: string | null
+          connection_key_ciphertext?: string
+          connector_id?: string
+          created_at?: string
+          folder_id?: string | null
+          id?: string
+          reconnect_required?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       error_reports: {
         Row: {
           app_version: string | null
