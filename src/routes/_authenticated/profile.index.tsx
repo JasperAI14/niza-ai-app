@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   ChevronRight,
+  HardDrive,
   Info,
   LifeBuoy,
   LogOut,
@@ -102,6 +103,12 @@ function ProfileHub() {
           icon={<User className="h-4 w-4" />}
           label="Personal Information"
           hint="Profile picture, display name and username"
+        />
+        <Row
+          to="/profile/drive"
+          icon={<HardDrive className="h-4 w-4" />}
+          label="Google Drive"
+          hint="Connect your Drive to keep your files"
         />
         <Row
           to="/profile/privacy"
