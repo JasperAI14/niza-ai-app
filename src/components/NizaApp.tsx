@@ -762,10 +762,11 @@ export function NizaApp() {
             </div>
           ) : (
             <div className="py-3">
-              {messages.map((m) => (
+              {messages.map((m, idx) => (
                 <ChatMessage
                   key={m.id}
                   message={m}
+                  userPrompt={m.role === "user" ? null : [...messages.slice(0, idx)].reverse().find((x) => x.role === "user")?.content ?? null}
                   onRegenerate={(id) => {
                     const msg = messages.find((x) => x.id === id);
                     if (msg?.media_model?.startsWith("puter") && msg.media_prompt && activeId) {

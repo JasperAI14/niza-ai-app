@@ -68,7 +68,9 @@ export function ChatMessage({
   onEditVideo,
   imageGenerating,
   onRetryImage,
+  userPrompt,
 }: {
+  userPrompt?: string | null;
   imageGenerating?: boolean;
   onRetryImage?: (m: UIMessage) => void;
   message: UIMessage;
@@ -89,7 +91,7 @@ export function ChatMessage({
   const isPending = !!message.pending || !!puterState;
   const isPersisted = !message.id.startsWith("p-") && !message.id.startsWith("u-");
   const hasMedia = !!message.image_url || !!message.audio_url || !!message.video_url;
-  const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(message.content);
+  const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(message.content, userPrompt);
   const showCopy = !isUser && !isPending && !hasMedia && !useCopyCard && isReusableContent(message.content);
   const showRegenText = !isUser && !isPending && !hasMedia && !!onRegenerateText && isPersisted;
   const canRegenerateImg = !isUser && !!message.image_url && isPersisted && !!onRegenerate;
