@@ -112,6 +112,16 @@ export function NizaApp() {
 
   async function runPuterImage(messageId: string, prompt: string, ratio: string, tid: string) {
     if (!prompt) return;
+    // Premium check comes before any Puter prompt: free users see the upgrade plans first.
+    const isPremium = meQ.data?.profile.plan === "premium";
+    if (!isPremium) {
+      await failPuterFn({
+        data: { messageId, reason: "Image generation needs a Premium plan." },
+      }).catch(() => {});
+      setUpgradeReason("image");
+      if (activeId) await qc.invalidateQueries({ queryKey: ["messages", activeId] });
+      return;
+    }
     setGenerating(messageId, true);
     try {
       const [session, link] = await Promise.all([puterSession(), getPuterLinkFn()]);
@@ -714,6 +724,7 @@ export function NizaApp() {
         onNewChat={() => createMut.mutate()}
         plan={plan}
         usage={usage ?? null}
+        onUpgrade={() => setUpgradeReason("both")}
       />
 
       {/* Main */}
