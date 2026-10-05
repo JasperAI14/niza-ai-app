@@ -41,9 +41,10 @@ type Props = {
   onNewChat: () => void;
   plan: "free" | "premium" | string;
   usage: Usage;
+  onUpgrade?: () => void;
 };
 
-export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan, usage }: Props) {
+export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan, usage, onUpgrade }: Props) {
   const qc = useQueryClient();
   const fetchThreads = useServerFn(listThreads);
   const removeThreadFn = useServerFn(deleteThreadFn);
@@ -308,7 +309,7 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
         {plan !== "premium" && (
           <div className="px-3 pb-2">
             <button
-              onClick={startUpgrade}
+              onClick={() => (onUpgrade ? onUpgrade() : startUpgrade())}
               disabled={upgrading}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
             >
