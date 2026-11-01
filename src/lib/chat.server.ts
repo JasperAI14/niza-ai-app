@@ -13,11 +13,14 @@ import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
 import { detectImageRequest, detectImageEdit, detectMusicRequest } from "./intent";
 import {
   buildClarification,
+  detectWebSearchIntent,
+  extractFirstUrl,
   inferAspectRatio,
   matchKnowledgeBase,
   needsClarification,
   type AspectRatio,
   type RouteMode,
+  type SearchKind,
 } from "./router-kb";
 
 export type ProfileData = { plan: Plan; promo_used: boolean; email: string | null };

@@ -218,3 +218,70 @@ export function buildClarification(text: string, turn = 0): { question: string; 
     options: [`Picture of ${subject}`, `Facts about ${subject}`, `A story about ${subject}`],
   };
 }
+
+// ------------------------------------------------ web-search intent detection
+//
+// Runs BEFORE clarification in the router: short live-information requests
+// like "latest news" must search, not trigger a follow-up question.
+
+export type SearchKind = "text" | "image" | "video" | "trends";
+
+const URL_RE = /\b(?:https?:\/\/|www\.)[^\s]+/i;
+
+// Generation language stays with image generation — never hijacked by search.
+const IMAGE_GEN_LANGUAGE =
+  /\b(generate|create|make|draw|paint|design|produce|render|sketch|imagine|visuali[sz]e|give\s+me)\b[^.?!]{0,40}\b(image|picture|photo|pic|drawing|painting|artwork|art|logo|poster|wallpaper|illustration|icon|banner|thumbnail|avatar|mockup|sticker)\b/i;
+
+const VIDEO_INTENT = [
+  /\b(watch|stream|streams|streaming|live)\b[^.?!]{0,60}\b(match|matches|game|games|football|soccer|basketball|cup|league|prayer|prayers|mass|service|church|mosque|news|event|concert|channel|video|youtube|now|today|tonight|online)\b/i,
+  /\b(find|search|show|get|looking\s+for|any)\b[^.?!]{0,40}\b(video|videos|youtube|live\s*stream|livestream)\b/i,
+  /\b(video|youtube)\b[^.?!]{0,40}\b(live|stream|streaming)\b/i,
+  /\blive\s*(match|game|stream|prayer|service|mass|news|event|concert|broadcast)\b/i,
+];
+
+const TRENDS_INTENT = [
+  /\b(what('s| is| are)|show|find|tell\s+me\s+about|discover|check)\b[^.?!]{0,40}\b(trending|trends|viral)\b/i,
+  /^\s*(trending|viral|trends)\b/i,
+  /\b(trending|viral)\s+(music|songs?|sounds?|dances?|dance|videos?|topics?|hashtags?|challenges?|memes?)\b/i,
+];
+
+// Plural "pictures of X" reads as real photos; singular "picture of X"
+// stays with image generation.
+const IMAGE_SEARCH_INTENT = [
+  /\b(real|actual|genuine|authentic)\b[^.?!]{0,30}\b(picture|pictures|photo|photos|image|images|pic|pics)\b/i,
+  /\b(show|find|search|get|look\s+for)\s+(me\s+)?(some\s+|the\s+)?(pictures|photos|images|pics)\b/i,
+  /\b(pictures|photos|images|pics)\s+(of|about|from)\s+\S+/i,
+];
+
+const TEXT_SEARCH_INTENT = [
+  /\bsearch(ing)?( the web| online| google| it| this)?(\s+for)?\b/i,
+  /\b(look\s?up|find\s+out|browse)\b/i,
+  /\b(latest|breaking|current|recent|today|tonight|this\s+(week|month|year)|up\s+to\s+date|right\s+now|nowadays)\b[^.?!]{0,60}\b(news|headlines|price|prices|rate|rates|score|scores|result|results|update|updates|weather|forecast|release|version|stock|market|exchange|president|winner|election|happening|going\s+on|status|situation|match|game)\b/i,
+  /\b(news|headlines)\b[^.?!]{0,30}\b(today|now|this week|tonight)\b/i,
+  /\b(what('s| is| was)?|who('s| is| was)?)\b[^.?!]{0,30}\b(happening|happened|going\s+on)\b/i,
+  /\b(who|what|where|when)\b[^.?!]{0,50}\b(current|currently|present|latest|now|today)\b/i,
+  /\b(exchange rate|stock price|share price|market cap|bitcoin price|crypto price|fuel price|petrol price|dollar (rate|to naira|price)|inflation rate)\b/i,
+  /\bin\s+20(2[6-9]|[3-9]\d)\b/i,
+];
+
+/** Detects an explicit live-information request and the kind of results it needs. */
+export function detectWebSearchIntent(text: string): { kind: SearchKind; query: string } | null {
+  const t = (text ?? "").trim();
+  if (!t) return null;
+  // A pasted link is read and analysed directly — except YouTube links, which play.
+  if (URL_RE.test(t)) {
+    return /youtu\.be|youtube\.com/i.test(t) ? { kind: "video", query: t } : null;
+  }
+  if (IMAGE_GEN_LANGUAGE.test(t)) return null;
+  if (VIDEO_INTENT.some((re) => re.test(t))) return { kind: "video", query: t };
+  if (TRENDS_INTENT.some((re) => re.test(t))) return { kind: "trends", query: t };
+  if (IMAGE_SEARCH_INTENT.some((re) => re.test(t))) return { kind: "image", query: t };
+  if (TEXT_SEARCH_INTENT.some((re) => re.test(t))) return { kind: "text", query: t };
+  return null;
+}
+
+/** First URL in a message, for direct page reading. */
+export function extractFirstUrl(text: string): string | null {
+  const m = /(?:https?:\/\/|www\.)[^\s]+/i.exec(text ?? "");
+  return m ? m[0] : null;
+}
