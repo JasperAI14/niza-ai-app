@@ -32,7 +32,7 @@ function UpgradeCallback() {
         if (r.ok) {
           setState("ok");
           setMessage(r.message);
-          setTimeout(() => navigate({ to: "/" }), 1800);
+          setTimeout(() => navigate({ to: "/chat" }), 1800);
         } else {
           setState("fail");
           setMessage(r.message);
@@ -67,7 +67,7 @@ function UpgradeCallback() {
             <h1 className="mt-3 text-lg font-semibold">Payment not verified</h1>
             <p className="mt-1 text-sm text-muted-foreground">{message}</p>
             <button
-              onClick={() => navigate({ to: "/" })}
+              onClick={() => navigate({ to: "/chat" })}
               className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground"
             >
               Back to app
