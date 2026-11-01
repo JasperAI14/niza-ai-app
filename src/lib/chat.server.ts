@@ -314,6 +314,8 @@ export type RouteDecision = {
   source: "rules" | "kb" | "model" | "clarify";
   confidence: number;
   ratio?: AspectRatio;
+  searchKind?: SearchKind;
+  url?: string;
   clarification?: { question: string; options: string[] };
 };
 
@@ -365,7 +367,26 @@ export async function routeRequest(
       : { mode: "VISION", prompt: content, source: "rules", confidence: 1 };
   }
 
-  // 2. Too thin to act on → one round of clarification (never billed).
+  // 2. Live-information intent outranks clarification: short requests like
+  //    "latest news" must search, not trigger a follow-up question.
+  const searchIntent = detectWebSearchIntent(content);
+  if (searchIntent) {
+    return {
+      mode: "WEB_SEARCH",
+      prompt: content,
+      searchKind: searchIntent.kind,
+      source: "rules",
+      confidence: 0.9,
+    };
+  }
+
+  // 3. A user-provided link is read and analysed directly.
+  const linkedUrl = extractFirstUrl(content);
+  if (linkedUrl) {
+    return { mode: "URL_RESEARCH", prompt: content, url: linkedUrl, source: "rules", confidence: 0.9 };
+  }
+
+  // 4. Too thin to act on → one round of clarification (never billed).
   if (!opts.skipClarify && needsClarification(content)) {
     return {
       mode: "CLARIFY",
@@ -376,7 +397,7 @@ export async function routeRequest(
     };
   }
 
-  // 3. Knowledge-base match.
+  // 5. Knowledge-base match.
   const kb = matchKnowledgeBase(content);
   if (kb && kb.confidence >= 0.8) {
     return {
@@ -388,7 +409,7 @@ export async function routeRequest(
     };
   }
 
-  // 4. Model classification only for the ambiguous middle band.
+  // 6. Model classification only for the ambiguous middle band.
   if (AMBIGUOUS.test(content) && content.length <= 600) {
     const mode = await routeWithModel(content);
     if (mode && mode !== "CHAT") {
@@ -402,7 +423,7 @@ export async function routeRequest(
     }
   }
 
-  // 5. Fall back to the knowledge-base weak match, then conversation.
+  // 7. Fall back to the knowledge-base weak match, then conversation.
   if (kb) return { mode: kb.mode, prompt: content, source: "kb", confidence: kb.confidence };
   return {
     mode: CODE_HINT.test(content) ? "CODE" : "CHAT",
