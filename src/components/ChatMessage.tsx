@@ -9,6 +9,7 @@ import { CodeBlock } from "./CodeBlock";
 import { ImageViewer } from "./ImageViewer";
 import { MusicCard, MusicPending } from "./MusicCard";
 import { downloadImageWithWatermark } from "@/lib/watermark";
+import { YouTubeEmbed } from "./YouTubeEmbed";
 
 export type UIMessage = {
   id: string;
@@ -43,6 +44,20 @@ async function nativeShare(text: string, url?: string) {
 }
 
 export const markdownComponents = {
+  img({ src, alt, ...props }: any) {
+    return (
+      <img
+        {...props}
+        src={String(src)}
+        alt={alt ?? "image result"}
+        loading="lazy"
+        className="max-h-64 w-auto rounded-xl border border-border"
+        onError={(e) => {
+          (e.currentTarget as HTMLImageElement).style.display = "none";
+        }}
+      />
+    );
+  },
   code({ inline, className, children, ...props }: any) {
     const match = /language-(\w+)/.exec(className || "");
     const raw = String(children).replace(/\n$/, "");
@@ -91,17 +106,27 @@ export function ChatMessage({
   const isPending = !!message.pending || !!puterState;
   const isPersisted = !message.id.startsWith("p-") && !message.id.startsWith("u-");
   const hasMedia = !!message.image_url || !!message.audio_url || !!message.video_url;
-  const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(message.content, userPrompt);
-  const showCopy = !isUser && !isPending && !hasMedia && !useCopyCard && isReusableContent(message.content);
+  const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(bodyText || message.content, userPrompt);
+  const showCopy = !isUser && !isPending && !hasMedia && !useCopyCard && isReusableContent(bodyText || message.content);
   const showRegenText = !isUser && !isPending && !hasMedia && !!onRegenerateText && isPersisted;
   const canRegenerateImg = !isUser && !!message.image_url && isPersisted && !!onRegenerate;
   const [copied, setCopied] = useState(false);
   const [viewer, setViewer] = useState(false);
+  const videoMarkers = !isUser
+    ? [...message.content.matchAll(/\[NIZA-VIDEO url="([^"]+)"(?: live="(\d)")?\]([\s\S]*?)\[\/NIZA-VIDEO\]/g)].map((m) => ({
+        url: m[1],
+        live: m[2] === "1",
+        title: m[3],
+      }))
+    : [];
+  const bodyText = videoMarkers.length
+    ? message.content.replace(/\[NIZA-VIDEO[\s\S]*?\[\/NIZA-VIDEO\]/g, "").trim()
+    : message.content;
   let pressTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function copyText() {
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(bodyText || message.content);
       setCopied(true);
       toast.success("Copied to clipboard.");
       setTimeout(() => setCopied(false), 1500);
@@ -173,7 +198,7 @@ export function ChatMessage({
           ) : (
             <>
               {/* ---- Text body ---- */}
-              {message.content && (
+              {bodyText && (
                 <div
                   className={`break-words leading-relaxed ${
                     isUser
@@ -184,10 +209,15 @@ export function ChatMessage({
                   }`}
                 >
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                    {message.content}
+                    {bodyText}
                   </ReactMarkdown>
                 </div>
               )}
+
+              {/* ---- Found videos (live search) ---- */}
+              {videoMarkers.map((v, i) => (
+                <YouTubeEmbed key={i} url={v.url} title={v.title} live={v.live} />
+              ))}
 
               {/* ---- Image ---- */}
               {message.image_url && (
