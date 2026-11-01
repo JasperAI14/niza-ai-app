@@ -106,12 +106,6 @@ export function ChatMessage({
   const isPending = !!message.pending || !!puterState;
   const isPersisted = !message.id.startsWith("p-") && !message.id.startsWith("u-");
   const hasMedia = !!message.image_url || !!message.audio_url || !!message.video_url;
-  const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(bodyText || message.content, userPrompt);
-  const showCopy = !isUser && !isPending && !hasMedia && !useCopyCard && isReusableContent(bodyText || message.content);
-  const showRegenText = !isUser && !isPending && !hasMedia && !!onRegenerateText && isPersisted;
-  const canRegenerateImg = !isUser && !!message.image_url && isPersisted && !!onRegenerate;
-  const [copied, setCopied] = useState(false);
-  const [viewer, setViewer] = useState(false);
   const videoMarkers = !isUser
     ? [...message.content.matchAll(/\[NIZA-VIDEO url="([^"]+)"(?: live="(\d)")?\]([\s\S]*?)\[\/NIZA-VIDEO\]/g)].map((m) => ({
         url: m[1],
@@ -122,6 +116,12 @@ export function ChatMessage({
   const bodyText = videoMarkers.length
     ? message.content.replace(/\[NIZA-VIDEO[\s\S]*?\[\/NIZA-VIDEO\]/g, "").trim()
     : message.content;
+  const useCopyCard = !isUser && !isPending && !hasMedia && shouldUseCopyCard(bodyText || message.content, userPrompt);
+  const showCopy = !isUser && !isPending && !hasMedia && !useCopyCard && isReusableContent(bodyText || message.content);
+  const showRegenText = !isUser && !isPending && !hasMedia && !!onRegenerateText && isPersisted;
+  const canRegenerateImg = !isUser && !!message.image_url && isPersisted && !!onRegenerate;
+  const [copied, setCopied] = useState(false);
+  const [viewer, setViewer] = useState(false);
   let pressTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function copyText() {
