@@ -18,6 +18,7 @@ export type RouteMode =
   | "MUSIC_SHORT"
   | "MUSIC_SONG"
   | "WEB_SEARCH"
+  | "URL_RESEARCH"
   | "CLARIFY";
 
 // ---------------------------------------------------------------- ratios

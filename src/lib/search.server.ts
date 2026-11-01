@@ -16,8 +16,9 @@
 // imported only inside server-function handlers (same pattern as chat.server.ts).
 
 import { generateText } from "./chat.server";
+import type { SearchKind } from "./router-kb";
 
-export type SearchKind = "text" | "image" | "video" | "trends";
+export type { SearchKind };
 export type WebSource = { title: string; url: string };
 export type VideoResult = { title: string; url: string; videoId: string | null; live: boolean };
 export type ImageResult = { title: string; url: string };
@@ -454,13 +455,10 @@ async function videoSearch(query: string, _dateCtx: string, _extraSystem?: strin
 
   if (videos.length) {
     const sources: WebSource[] = videos.map((v) => ({ title: v.title, url: v.url }));
-    const list = videos.map((v, i) => `${i + 1}. ${v.title}${v.live ? " (live)" : ""} — ${v.url}`).join("\n");
+    const list = videos.map((v, i) => `${i + 1}. ${v.title}${v.live ? " (live)" : ""}`).join("\n");
     return {
       ok: true,
-      text: `I found these videos for you. Press play to watch right here — if a video can't play inside the app, use its “Watch on YouTube” link.\n\n${list
-        .split("\n")
-        .slice(0, 0)
-        .join("")}`,
+      text: `I found these videos for you. Press play to watch right here — if a video can't play inside the app, use its “Watch on YouTube” link.\n\n${list}`,
       sources,
       videos,
       images: [],
