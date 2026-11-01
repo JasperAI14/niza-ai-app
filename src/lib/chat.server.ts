@@ -301,51 +301,6 @@ export async function generateText(messages: ChatMsg[], extraSystem?: string): P
 }
 
 // ============================================================
-// WEB SEARCH
-// Time-sensitive questions are answered from live results and
-// summarised normally. No engine or provider is ever named.
-// ============================================================
-export async function webSearchAnswer(
-  question: string,
-  extraSystem?: string,
-): Promise<{ text: string; sources: Array<{ title: string; url: string }> }> {
-  const key = process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (key) {
-    try {
-      const j = await geminiGenerate(
-        key,
-        "gemini-2.5-flash",
-        [{ role: "user", parts: [{ text: question }] }],
-        {
-          tools: [{ google_search: {} }],
-          systemInstruction: {
-            parts: [{ text: `${SYSTEM_PROMPT}\n${extraSystem ?? ""}\nAnswer using the latest information available and state the date of anything time-sensitive.` }],
-          },
-        },
-      );
-      const cand = j?.candidates?.[0];
-      const text = cand?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
-      const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
-      const sources: Array<{ title: string; url: string }> = [];
-      for (const c of chunks) {
-        const w = c?.web;
-        if (w?.uri && !sources.some((s) => s.url === w.uri)) {
-          sources.push({ title: w.title || w.uri, url: w.uri });
-        }
-      }
-      if (text) return { text, sources: sources.slice(0, 5) };
-    } catch (e) {
-      console.error("[search] live lookup failed:", (e as Error).message);
-    }
-  }
-  const text = await generateText([{ role: "user", content: question }], extraSystem);
-  return {
-    text: `${text}\n\n_I couldn't check live sources just now, so please verify anything time-sensitive._`,
-    sources: [],
-  };
-}
-
-// ============================================================
 // INTELLIGENT AI ROUTER
 // Deterministic knowledge-base rules win; only genuinely ambiguous
 // wording costs a classifier call. Thin requests go to clarification.
