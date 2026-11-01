@@ -9,12 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as HelpRouteImport } from './routes/help'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as TermsRouteImport } from './routes/terms'
+import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedAdminErrorsRouteImport } from './routes/_authenticated/admin.errors'
 import { Route as AuthenticatedAdminNovaHubRouteImport } from './routes/_authenticated/admin.nova-hub'
@@ -33,6 +36,11 @@ import { Route as OauthGoogleDriveReturnRouteImport } from './routes/oauth.googl
 import { Route as ApiPublicNovahubWebhookRouteImport } from './routes/api/public/novahub/webhook'
 import { Route as ApiPublicPaystackWebhookRouteImport } from './routes/api/public/paystack/webhook'
 
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -52,14 +60,24 @@ const HelpRoute = HelpRouteImport.update({
   path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
-  id: '/',
-  path: '/',
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
@@ -163,11 +181,14 @@ const ApiPublicPaystackWebhookRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AuthenticatedIndexRoute
+  '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/terms': typeof TermsRoute
+  '/chat': typeof AuthenticatedChatRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -187,12 +208,15 @@ export interface FileRoutesByFullPath {
   '/api/public/paystack/webhook': typeof ApiPublicPaystackWebhookRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/terms': typeof TermsRoute
+  '/chat': typeof AuthenticatedChatRoute
   '/api/transcribe': typeof ApiTranscribeRoute
-  '/': typeof AuthenticatedIndexRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
@@ -212,13 +236,16 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
+  '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/terms': typeof TermsRoute
+  '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/api/transcribe': typeof ApiTranscribeRoute
-  '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/_authenticated/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
@@ -243,7 +270,10 @@ export interface FileRouteTypes {
     | '/auth'
     | '/docs'
     | '/help'
+    | '/privacy'
     | '/reset-password'
+    | '/terms'
+    | '/chat'
     | '/api/transcribe'
     | '/admin/errors'
     | '/admin/nova-hub'
@@ -263,12 +293,15 @@ export interface FileRouteTypes {
     | '/api/public/paystack/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/'
     | '/auth'
     | '/docs'
     | '/help'
+    | '/privacy'
     | '/reset-password'
+    | '/terms'
+    | '/chat'
     | '/api/transcribe'
-    | '/'
     | '/admin/errors'
     | '/admin/nova-hub'
     | '/admin/payments'
@@ -287,13 +320,16 @@ export interface FileRouteTypes {
     | '/api/public/paystack/webhook'
   id:
     | '__root__'
+    | '/'
     | '/_authenticated'
     | '/auth'
     | '/docs'
     | '/help'
+    | '/privacy'
     | '/reset-password'
+    | '/terms'
+    | '/_authenticated/chat'
     | '/api/transcribe'
-    | '/_authenticated/'
     | '/_authenticated/admin/errors'
     | '/_authenticated/admin/nova-hub'
     | '/_authenticated/admin/payments'
@@ -313,11 +349,14 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   DocsRoute: typeof DocsRoute
   HelpRoute: typeof HelpRoute
+  PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  TermsRoute: typeof TermsRoute
   ApiTranscribeRoute: typeof ApiTranscribeRoute
   OauthGoogleDriveReturnRoute: typeof OauthGoogleDriveReturnRoute
   ApiPublicNovahubWebhookRoute: typeof ApiPublicNovahubWebhookRoute
@@ -326,6 +365,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
@@ -354,6 +400,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HelpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -361,11 +414,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/': {
-      id: '/_authenticated/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/chat': {
+      id: '/_authenticated/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AuthenticatedChatRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/transcribe': {
@@ -491,7 +551,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedAdminErrorsRoute: typeof AuthenticatedAdminErrorsRoute
   AuthenticatedAdminNovaHubRoute: typeof AuthenticatedAdminNovaHubRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
@@ -508,7 +568,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedAdminErrorsRoute: AuthenticatedAdminErrorsRoute,
   AuthenticatedAdminNovaHubRoute: AuthenticatedAdminNovaHubRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
@@ -528,11 +588,14 @@ const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   DocsRoute: DocsRoute,
   HelpRoute: HelpRoute,
+  PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  TermsRoute: TermsRoute,
   ApiTranscribeRoute: ApiTranscribeRoute,
   OauthGoogleDriveReturnRoute: OauthGoogleDriveReturnRoute,
   ApiPublicNovahubWebhookRoute: ApiPublicNovahubWebhookRoute,

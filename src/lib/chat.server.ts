@@ -13,11 +13,14 @@ import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
 import { detectImageRequest, detectImageEdit, detectMusicRequest } from "./intent";
 import {
   buildClarification,
+  detectWebSearchIntent,
+  extractFirstUrl,
   inferAspectRatio,
   matchKnowledgeBase,
   needsClarification,
   type AspectRatio,
   type RouteMode,
+  type SearchKind,
 } from "./router-kb";
 
 export type ProfileData = { plan: Plan; promo_used: boolean; email: string | null };
@@ -298,51 +301,6 @@ export async function generateText(messages: ChatMsg[], extraSystem?: string): P
 }
 
 // ============================================================
-// WEB SEARCH
-// Time-sensitive questions are answered from live results and
-// summarised normally. No engine or provider is ever named.
-// ============================================================
-export async function webSearchAnswer(
-  question: string,
-  extraSystem?: string,
-): Promise<{ text: string; sources: Array<{ title: string; url: string }> }> {
-  const key = process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (key) {
-    try {
-      const j = await geminiGenerate(
-        key,
-        "gemini-2.5-flash",
-        [{ role: "user", parts: [{ text: question }] }],
-        {
-          tools: [{ google_search: {} }],
-          systemInstruction: {
-            parts: [{ text: `${SYSTEM_PROMPT}\n${extraSystem ?? ""}\nAnswer using the latest information available and state the date of anything time-sensitive.` }],
-          },
-        },
-      );
-      const cand = j?.candidates?.[0];
-      const text = cand?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
-      const chunks = cand?.groundingMetadata?.groundingChunks ?? [];
-      const sources: Array<{ title: string; url: string }> = [];
-      for (const c of chunks) {
-        const w = c?.web;
-        if (w?.uri && !sources.some((s) => s.url === w.uri)) {
-          sources.push({ title: w.title || w.uri, url: w.uri });
-        }
-      }
-      if (text) return { text, sources: sources.slice(0, 5) };
-    } catch (e) {
-      console.error("[search] live lookup failed:", (e as Error).message);
-    }
-  }
-  const text = await generateText([{ role: "user", content: question }], extraSystem);
-  return {
-    text: `${text}\n\n_I couldn't check live sources just now, so please verify anything time-sensitive._`,
-    sources: [],
-  };
-}
-
-// ============================================================
 // INTELLIGENT AI ROUTER
 // Deterministic knowledge-base rules win; only genuinely ambiguous
 // wording costs a classifier call. Thin requests go to clarification.
@@ -356,6 +314,8 @@ export type RouteDecision = {
   source: "rules" | "kb" | "model" | "clarify";
   confidence: number;
   ratio?: AspectRatio;
+  searchKind?: SearchKind;
+  url?: string;
   clarification?: { question: string; options: string[] };
 };
 
@@ -407,7 +367,26 @@ export async function routeRequest(
       : { mode: "VISION", prompt: content, source: "rules", confidence: 1 };
   }
 
-  // 2. Too thin to act on → one round of clarification (never billed).
+  // 2. Live-information intent outranks clarification: short requests like
+  //    "latest news" must search, not trigger a follow-up question.
+  const searchIntent = detectWebSearchIntent(content);
+  if (searchIntent) {
+    return {
+      mode: "WEB_SEARCH",
+      prompt: content,
+      searchKind: searchIntent.kind,
+      source: "rules",
+      confidence: 0.9,
+    };
+  }
+
+  // 3. A user-provided link is read and analysed directly.
+  const linkedUrl = extractFirstUrl(content);
+  if (linkedUrl) {
+    return { mode: "URL_RESEARCH", prompt: content, url: linkedUrl, source: "rules", confidence: 0.9 };
+  }
+
+  // 4. Too thin to act on → one round of clarification (never billed).
   if (!opts.skipClarify && needsClarification(content)) {
     return {
       mode: "CLARIFY",
@@ -418,7 +397,7 @@ export async function routeRequest(
     };
   }
 
-  // 3. Knowledge-base match.
+  // 5. Knowledge-base match.
   const kb = matchKnowledgeBase(content);
   if (kb && kb.confidence >= 0.8) {
     return {
@@ -430,7 +409,7 @@ export async function routeRequest(
     };
   }
 
-  // 4. Model classification only for the ambiguous middle band.
+  // 6. Model classification only for the ambiguous middle band.
   if (AMBIGUOUS.test(content) && content.length <= 600) {
     const mode = await routeWithModel(content);
     if (mode && mode !== "CHAT") {
@@ -444,7 +423,7 @@ export async function routeRequest(
     }
   }
 
-  // 5. Fall back to the knowledge-base weak match, then conversation.
+  // 7. Fall back to the knowledge-base weak match, then conversation.
   if (kb) return { mode: kb.mode, prompt: content, source: "kb", confidence: kb.confidence };
   return {
     mode: CODE_HINT.test(content) ? "CODE" : "CHAT",

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { NizaApp } from "@/components/NizaApp";
 
-export const Route = createFileRoute("/_authenticated/")({
+export const Route = createFileRoute("/_authenticated/chat")({
   head: () => ({
     meta: [
       { title: "Niza Prime AI — Chat, Code & Images" },

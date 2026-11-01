@@ -17,8 +17,8 @@ import {
   nizaVisionAnalyze,
   routeRequest,
   smartTitle,
-  webSearchAnswer,
 } from "./chat.server";
+import { runSearch, researchUrl } from "./search.server";
 
 // ---------- types (erased at build time) ----------
 export type DBMessage = {
@@ -582,15 +582,33 @@ export const sendMessage = createServerFn({ method: "POST" })
         ? [c.question, ...(c.options.length ? [c.options.map((o) => `- ${o}`).join("\n")] : [])].join("\n\n")
         : "Could you tell me a bit more about what you need?";
     } else if (route.mode === "WEB_SEARCH") {
-      try {
-        const { text, sources } = await webSearchAnswer(route.prompt);
-        assistantContent = sources.length
-          ? `${text}\n\n**Sources**\n${sources.map((s) => `- [${s.title}](${s.url})`).join("\n")}`
-          : text;
+      const kind = route.searchKind ?? "text";
+      const res = await runSearch(route.prompt, kind);
+      if (res.ok) {
+        assistantContent = res.text;
+        for (const v of res.videos) {
+          assistantContent += `\n\n[NIZA-VIDEO url="${v.url}" live="${v.live ? 1 : 0}"]${v.title.replace(/[[\]]/g, "")}[/NIZA-VIDEO]`;
+        }
+        if (res.images.length) {
+          assistantContent += `\n\n${res.images.map((im) => `![real image result](${im.url})`).join("\n\n")}`;
+        }
+        if (res.sources.length) {
+          assistantContent += `\n\n**Sources**\n${res.sources.map((s) => `- [${s.title}](${s.url})`).join("\n")}`;
+        }
         if (!isAdmin) await bumpText();
-      } catch (e) {
-        console.error("web search failed:", e);
-        assistantContent = "I couldn't check live sources just now. Please try again shortly.";
+      } else {
+        assistantContent = res.error;
+      }
+    } else if (route.mode === "URL_RESEARCH" && route.url) {
+      const res = await researchUrl(route.url, route.prompt);
+      if (res.ok) {
+        assistantContent = res.text;
+        if (res.sources.length) {
+          assistantContent += `\n\n**Source**\n${res.sources.map((s) => `- [${s.title}](${s.url})`).join("\n")}`;
+        }
+        if (!isAdmin) await bumpText();
+      } else {
+        assistantContent = res.error;
       }
     } else {
 

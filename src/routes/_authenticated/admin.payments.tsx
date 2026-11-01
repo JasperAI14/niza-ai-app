@@ -55,7 +55,7 @@ function PaymentsAdmin() {
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           You don't have permission to view Payment Settings.
         </div>
-        <Link to="/" className="mt-4 inline-block text-sm text-primary hover:underline">
+        <Link to="/chat" className="mt-4 inline-block text-sm text-primary hover:underline">
           &larr; Back to app
         </Link>
       </div>
@@ -68,7 +68,7 @@ function PaymentsAdmin() {
 
   return (
     <div className="mx-auto max-w-3xl p-4 md:p-8">
-      <Link to="/" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link to="/chat" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Back to app
       </Link>
       <h1 className="text-2xl font-semibold">Payment Settings</h1>

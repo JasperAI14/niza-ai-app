@@ -59,7 +59,7 @@ function ResetPasswordPage() {
       return;
     }
     toast.success("Password updated. You're signed in.");
-    navigate({ to: "/" });
+    navigate({ to: "/chat" });
   }
 
   return (

@@ -50,7 +50,7 @@ function AuthPage() {
         if (cancelled) return;
         if (me.profile.promo_used) {
           router.invalidate();
-          navigate({ to: "/" });
+          navigate({ to: "/chat" });
         } else {
           setPhase("promo");
         }
@@ -68,7 +68,7 @@ function AuthPage() {
       const me = await fetchMe();
       if (me.profile.promo_used) {
         router.invalidate();
-        navigate({ to: "/" });
+        navigate({ to: "/chat" });
       } else {
         setPhase("promo");
       }
@@ -147,7 +147,7 @@ function AuthPage() {
     if (r.ok) {
       toast.success(r.message);
       router.invalidate();
-      navigate({ to: "/" });
+      navigate({ to: "/chat" });
     } else {
       toast.error(r.message);
     }

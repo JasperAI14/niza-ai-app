@@ -10,7 +10,7 @@ export type DocSection = {
 };
 
 export const PRODUCT_SUMMARY =
-  "Niza Prime AI is a single AI workspace. Chat is the centre of the app: you can hold a normal conversation, generate and edit images, analyse pictures and documents, search the live web, find real images and videos, write and preview code, and edit videos — all from the same conversation.";
+  "Niza Prime AI is a single AI workspace. Chat is the centre of the app: hold a normal conversation, generate and edit images, search the live web with sources, find real photos and videos including live streams, read web links you paste, track what's trending, analyse pictures and documents, write and preview code, and edit videos — all from the same conversation.";
 
 export const PUBLIC_MODELS = [
   { name: "Niza Chat 1.0", what: "Everyday conversation, explanations, writing and reasoning." },
@@ -40,8 +40,10 @@ export const DOC_SECTIONS: DocSection[] = [
     id: "search",
     title: "Search",
     body: [
-      "When a question depends on current information, Niza Prime AI searches the live web and answers with links to its sources.",
-      "When you ask for a real picture of something, it finds a real existing image instead of inventing one. When you ask for a video, it returns a real video result you can play inside the app.",
+      "When a question depends on current information — news, prices, results, weather, what's happening today — Niza Prime AI searches the live web across several search services and answers with links to its sources.",
+      "Ask for a real picture of something and it finds real existing photos from the web. Ask for a video — including live match broadcasts, live church services and other live streams — and it plays it right inside the app with the official player; if a video can't be embedded, a direct link to watch it on YouTube is shown instead.",
+      "Paste any web link into the chat and Niza Prime AI reads the page and answers your questions about it.",
+      "Ask what's trending and it pulls trending music, dances and topics from public trend feeds such as Google Trends and TikTok's public Creative Center, always with sources.",
     ],
   },
   {
@@ -65,11 +67,6 @@ export const DOC_SECTIONS: DocSection[] = [
       "Upload a video in Chat and describe the change in plain language — trim it, rotate it, mute it, speed it up, or convert it to a different shape. The edited video comes back into the same conversation.",
       "Your video stays attached to the conversation, so you can keep editing it without uploading it again.",
     ],
-  },
-  {
-    id: "music",
-    title: "Music",
-    body: ["Ask for a short instrumental piece or a full song and it plays back inside the conversation."],
   },
   {
     id: "account",
@@ -111,6 +108,14 @@ export const FAQS: { q: string; a: string }[] = [
     a: "No. Video results are played through their official player and cannot be downloaded from Niza Prime AI.",
   },
   {
+    q: "A video won't play inside the app. What do I do?",
+    a: "Some videos and live streams can't be embedded by their owners. When that happens, a direct link to watch the video on YouTube is shown under the player.",
+  },
+  {
+    q: "Can I share a web link and ask about it?",
+    a: "Yes. Paste the link into the chat with your question and Niza Prime AI reads that page and answers from it.",
+  },
+  {
     q: "How do I contact a human?",
     a: "Open Help and use Contact Support. Replies appear in your support thread inside the app.",
   },
@@ -131,7 +136,7 @@ export const TUTORIAL_STEPS: { title: string; body: string }[] = [
   },
   {
     title: "Search that is actually live",
-    body: "For anything current, Niza Prime AI searches the web and shows its sources. It can also find real photos and real videos.",
+    body: "For anything current, Niza Prime AI searches the web and shows its sources. It also finds real photos, plays videos and live streams inside the app, reads links you paste, and tracks what's trending.",
   },
   {
     title: "Code and preview",
