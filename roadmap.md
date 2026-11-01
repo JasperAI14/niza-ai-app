@@ -17,4 +17,7 @@ Work strictly in this order.
 - [ ] 6. Settings overhaul (persistence, Clear All 10-day recovery, Archive)
 - [ ] 7. Firebase Auth + FCM web push + public landing page at / + full /privacy page
 - [ ] 8. Cleanup (music UI/docs/about page, old plan files) + final verification
-- Blocked: web search needs TAVILY_API_KEY + GEMINI_API_KEY
+- [x] Workflow 17 — multi-engine live search: general web + real images (Tavily), YouTube/videos incl. live streams (dedicated Gemini key), link reading (Firecrawl), fallback (Perplexity); no silent offline fallback; current date injected; in-app video player with YouTube fallback link; viral trends from public feeds
+- [x] AssetLinks — public/.well-known/assetlinks.json served as plain JSON
+- [x] Workflow 1 — public homepage at / (logged-in users go to /chat), public /privacy and /terms, full privacy policy shared with Profile screen, docs/help updated (music removed)
+- [ ] Pending user input: TAVILY_API_KEY + GEMINI_YOUTUBE_API_KEY values (secret forms), Firecrawl + Perplexity connections (cards)
