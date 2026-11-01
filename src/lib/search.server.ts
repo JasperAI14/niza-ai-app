@@ -432,7 +432,7 @@ async function videoSearch(query: string, _dateCtx: string, _extraSystem?: strin
     const pplx = await perplexitySearch(`${query} site:youtube.com`);
     videos = (pplx ?? [])
       .filter((r) => /youtu\.be|youtube\.com/i.test(r.url))
-      .map((r) => {
+      .map((r): VideoResult | null => {
         const id = youtubeId(r.url);
         return id
           ? { title: r.title, url: `https://www.youtube.com/watch?v=${id}`, videoId: id, live: /\blive\b/i.test(r.title) || /\/live\//i.test(r.url) }
@@ -444,7 +444,7 @@ async function videoSearch(query: string, _dateCtx: string, _extraSystem?: strin
     const tv = await tavilySearch(`${query} youtube`, { topic: "general", maxResults: 8 });
     videos = (tv?.results ?? [])
       .filter((r) => /youtu\.be|youtube\.com/i.test(r.url))
-      .map((r) => {
+      .map((r): VideoResult | null => {
         const id = youtubeId(r.url);
         return id
           ? { title: r.title, url: `https://www.youtube.com/watch?v=${id}`, videoId: id, live: /\blive\b/i.test(r.title) || /\/live\//i.test(r.url) }
