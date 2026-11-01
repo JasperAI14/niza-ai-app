@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedAdminErrorsRouteImport } from './routes/_authenticated/admin.errors'
 import { Route as AuthenticatedAdminNovaHubRouteImport } from './routes/_authenticated/admin.nova-hub'
@@ -55,6 +56,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
   id: '/api/transcribe',
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/chat': typeof AuthenticatedChatRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/chat': typeof AuthenticatedChatRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -211,6 +219,7 @@ export interface FileRoutesById {
   '/docs': typeof DocsRoute
   '/help': typeof HelpRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_authenticated/chat': typeof AuthenticatedChatRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/_authenticated/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/_authenticated/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -237,6 +246,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/help'
     | '/reset-password'
+    | '/chat'
     | '/api/transcribe'
     | '/admin/errors'
     | '/admin/nova-hub'
@@ -261,6 +271,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/help'
     | '/reset-password'
+    | '/chat'
     | '/api/transcribe'
     | '/admin/errors'
     | '/admin/nova-hub'
@@ -285,6 +296,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/help'
     | '/reset-password'
+    | '/_authenticated/chat'
     | '/api/transcribe'
     | '/_authenticated/admin/errors'
     | '/_authenticated/admin/nova-hub'
@@ -352,6 +364,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/chat': {
+      id: '/_authenticated/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AuthenticatedChatRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/transcribe': {
       id: '/api/transcribe'
@@ -476,6 +495,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedChatRoute: typeof AuthenticatedChatRoute
   AuthenticatedAdminErrorsRoute: typeof AuthenticatedAdminErrorsRoute
   AuthenticatedAdminNovaHubRoute: typeof AuthenticatedAdminNovaHubRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
@@ -492,6 +512,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedChatRoute: AuthenticatedChatRoute,
   AuthenticatedAdminErrorsRoute: AuthenticatedAdminErrorsRoute,
   AuthenticatedAdminNovaHubRoute: AuthenticatedAdminNovaHubRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
