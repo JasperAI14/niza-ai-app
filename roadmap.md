@@ -20,4 +20,4 @@ Work strictly in this order.
 - [x] Workflow 17 — multi-engine live search: general web + real images (Tavily), YouTube/videos incl. live streams (dedicated Gemini key), link reading (Firecrawl), fallback (Perplexity); no silent offline fallback; current date injected; in-app video player with YouTube fallback link; viral trends from public feeds
 - [x] AssetLinks — public/.well-known/assetlinks.json served as plain JSON
 - [x] Workflow 1 — public homepage at / (logged-in users go to /chat), public /privacy and /terms, full privacy policy shared with Profile screen, docs/help updated (music removed)
-- [ ] Pending user input: TAVILY_API_KEY + GEMINI_YOUTUBE_API_KEY values (secret forms), Firecrawl + Perplexity connections (cards)
+- [x] Configured: TAVILY_API_KEY + GEMINI_YOUTUBE_API_KEY saved via secret forms; Firecrawl + Perplexity connectors linked (managed, gateway-backed)
