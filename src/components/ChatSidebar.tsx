@@ -64,8 +64,6 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
   const [renameValue, setRenameValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [upgrading, setUpgrading] = useState(false);
-  void upgrading; void setUpgrading;
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
