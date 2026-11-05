@@ -15,8 +15,6 @@ export type RouteMode =
   | "IMAGE_GEN"
   | "IMAGE_EDIT"
   | "VISION"
-  | "MUSIC_SHORT"
-  | "MUSIC_SONG"
   | "WEB_SEARCH"
   | "URL_RESEARCH"
   | "CLARIFY";

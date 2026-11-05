@@ -7,8 +7,7 @@ import { isReusableContent, shouldUseCopyCard } from "@/lib/intent";
 import { CopyCard } from "./CopyCard";
 import { CodeBlock } from "./CodeBlock";
 import { ImageViewer } from "./ImageViewer";
-import { MusicCard, MusicPending } from "./MusicCard";
-import { downloadImageWithWatermark } from "@/lib/watermark";
+export function ChatMessage({import { downloadImageWithWatermark } from "@/lib/watermark";
 import { YouTubeEmbed } from "./YouTubeEmbed";
 
 export type UIMessage = {
