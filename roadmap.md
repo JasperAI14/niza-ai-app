@@ -28,7 +28,7 @@ Work strictly in this order.
 - [ ] CF1. Accurate limit alerts — remove false "limit reached" banners; show prompt only when the plan allowance is truly exhausted (no music leftovers in limit paths)
 - [ ] CF2. Full-screen Plans page from sidebar "Upgrade"; keep the 4 micro-plans; image generation marked Premium
 - [ ] CF3. Mobile containment 320–390px — no horizontal overflow in bubbles, action buttons, tooltips, code blocks
-- [ ] CF4. Remove leftover music-generation code/UI (MusicCard, music limit messages) — music gen is permanently removed
+- [x] CF4. Remove leftover music-generation code/UI (MusicCard, music limit messages) — music gen is permanently removed
 
 ### New features (order)
 - [ ] F1. Puter persistent session — survives reloads until user taps Disconnect in Settings; tokens stored securely (no plaintext long-lived creds in localStorage/profiles)
