@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -24,7 +25,6 @@ import {
   setThreadPinned,
   type DBThread,
 } from "@/lib/chat.functions";
-import { initializePremiumCheckout } from "@/lib/paystack.functions";
 
 type Usage = {
   text_count: number;
@@ -46,12 +46,12 @@ type Props = {
 
 export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan, usage, onUpgrade }: Props) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const fetchThreads = useServerFn(listThreads);
   const removeThreadFn = useServerFn(deleteThreadFn);
   const renameFn = useServerFn(renameThreadFn);
   const pinFn = useServerFn(setThreadPinned);
   const searchFn = useServerFn(searchMessages);
-  const checkoutFn = useServerFn(initializePremiumCheckout);
 
   const threadsQ = useQuery({ queryKey: ["threads"], queryFn: () => fetchThreads() });
   const threads = (threadsQ.data ?? []) as DBThread[];
@@ -65,6 +65,7 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
+  void upgrading; void setUpgrading;
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -118,21 +119,7 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
   }
 
   async function startUpgrade() {
-    setUpgrading(true);
-    try {
-      const res = await checkoutFn({
-        data: { callbackUrl: `${window.location.origin}/upgrade/callback` },
-      });
-      if (!res.ok) {
-        toast.error(res.message);
-        setUpgrading(false);
-        return;
-      }
-      window.location.href = res.authorizationUrl;
-    } catch {
-      toast.error("Could not start checkout. Please try again.");
-      setUpgrading(false);
-    }
+    navigate({ to: "/plans" });
   }
 
   function renderItem(t: DBThread) {
@@ -312,11 +299,7 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
               onClick={() => (onUpgrade ? onUpgrade() : navigate({ to: "/plans" }))}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15"
             >
-              {upgrading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
+              <Sparkles className="h-3.5 w-3.5" />
               Upgrade to Premium
             </button>
           </div>
