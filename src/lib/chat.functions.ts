@@ -404,8 +404,6 @@ export const sendMessage = createServerFn({ method: "POST" })
     let assistantContent = "";
     let imagePath: string | null = null;
     let signedImage: string | null = null;
-    let audioPath: string | null = null;
-    let signedAudio: string | null = null;
     let watermarked = false;
 
     async function storeImage(buf: ArrayBuffer) {
@@ -544,9 +542,8 @@ export const sendMessage = createServerFn({ method: "POST" })
         role: "assistant",
         content: assistantContent,
         image_url: imagePath,
-        audio_url: audioPath,
         watermarked,
-        media_prompt: isMedia ? route.prompt : null,
+        media_prompt: isImage ? route.prompt : null,
       })
       .select("id, thread_id, role, content, image_url, audio_url, watermarked, edited, created_at")
       .single();
@@ -565,7 +562,6 @@ export const sendMessage = createServerFn({ method: "POST" })
       assistant: {
         ...(inserted as any),
         image_url: signedImage ?? (inserted as any)?.image_url ?? null,
-        audio_url: signedAudio ?? (inserted as any)?.audio_url ?? null,
       },
     };
   });
