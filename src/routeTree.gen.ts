@@ -18,6 +18,7 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AuthenticatedChatRouteImport } from './routes/_authenticated/chat'
+import { Route as AuthenticatedPlansRouteImport } from './routes/_authenticated/plans'
 import { Route as ApiTranscribeRouteImport } from './routes/api/transcribe'
 import { Route as AuthenticatedAdminErrorsRouteImport } from './routes/_authenticated/admin.errors'
 import { Route as AuthenticatedAdminNovaHubRouteImport } from './routes/_authenticated/admin.nova-hub'
@@ -78,6 +79,11 @@ const TermsRoute = TermsRouteImport.update({
 const AuthenticatedChatRoute = AuthenticatedChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPlansRoute = AuthenticatedPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ApiTranscribeRoute = ApiTranscribeRouteImport.update({
@@ -189,6 +195,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/plans': typeof AuthenticatedPlansRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -216,6 +223,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
   '/chat': typeof AuthenticatedChatRoute
+  '/plans': typeof AuthenticatedPlansRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -245,6 +253,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/terms': typeof TermsRoute
   '/_authenticated/chat': typeof AuthenticatedChatRoute
+  '/_authenticated/plans': typeof AuthenticatedPlansRoute
   '/api/transcribe': typeof ApiTranscribeRoute
   '/_authenticated/admin/errors': typeof AuthenticatedAdminErrorsRoute
   '/_authenticated/admin/nova-hub': typeof AuthenticatedAdminNovaHubRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/terms'
     | '/chat'
+    | '/plans'
     | '/api/transcribe'
     | '/admin/errors'
     | '/admin/nova-hub'
@@ -301,6 +311,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/terms'
     | '/chat'
+    | '/plans'
     | '/api/transcribe'
     | '/admin/errors'
     | '/admin/nova-hub'
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/terms'
     | '/_authenticated/chat'
+    | '/_authenticated/plans'
     | '/api/transcribe'
     | '/_authenticated/admin/errors'
     | '/_authenticated/admin/nova-hub'
@@ -426,6 +438,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof AuthenticatedChatRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/plans': {
+      id: '/_authenticated/plans'
+      path: '/plans'
+      fullPath: '/plans'
+      preLoaderRoute: typeof AuthenticatedPlansRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/transcribe': {
@@ -552,6 +571,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedChatRoute: typeof AuthenticatedChatRoute
+  AuthenticatedPlansRoute: typeof AuthenticatedPlansRoute
   AuthenticatedAdminErrorsRoute: typeof AuthenticatedAdminErrorsRoute
   AuthenticatedAdminNovaHubRoute: typeof AuthenticatedAdminNovaHubRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
@@ -569,6 +589,7 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChatRoute: AuthenticatedChatRoute,
+  AuthenticatedPlansRoute: AuthenticatedPlansRoute,
   AuthenticatedAdminErrorsRoute: AuthenticatedAdminErrorsRoute,
   AuthenticatedAdminNovaHubRoute: AuthenticatedAdminNovaHubRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,

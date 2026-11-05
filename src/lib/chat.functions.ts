@@ -13,7 +13,6 @@ import {
   loadOrResetUsage,
   loadProfile,
   mediaDelay,
-  nizaMusic,
   nizaVisionAnalyze,
   routeRequest,
   smartTitle,
@@ -286,69 +285,6 @@ export const listPinned = createServerFn({ method: "GET" })
     return (rows ?? []).map((r: any) => r.message_id as string);
   });
 
-export const saveMusic = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { messageId: string; title?: string }) =>
-    z.object({ messageId: z.string().uuid(), title: z.string().max(120).optional() }).parse(d),
-  )
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const { data: msg } = await supabase
-      .from("messages")
-      .select("id, audio_url, thread_id, created_at")
-      .eq("id", data.messageId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (!msg?.audio_url) return { ok: false, message: "No track found on that message." };
-    const { data: prompt } = await supabase
-      .from("messages")
-      .select("content")
-      .eq("user_id", userId)
-      .eq("thread_id", msg.thread_id)
-      .eq("role", "user")
-      .lt("created_at", msg.created_at)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const { error } = await supabase.from("music_history").insert({
-      user_id: userId,
-      title: data.title ?? (prompt?.content ? deriveTitle(prompt.content) : "Untitled track"),
-      prompt: prompt?.content ?? "",
-      audio_path: msg.audio_url,
-    });
-    if (error) {
-      console.error("[saveMusic] DB error:", error);
-      return { ok: false, message: "Could not save this track." };
-    }
-    return { ok: true, message: "Saved to your music history." };
-  });
-
-export const listMusic = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context as any;
-    const { data: rows } = await supabase
-      .from("music_history")
-      .select("id, title, prompt, audio_path, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    const out: Array<{ id: string; title: string; prompt: string; url: string | null; created_at: string }> = [];
-    for (const r of rows ?? []) {
-      const { data: signed } = await supabase.storage
-        .from("generated-audio")
-        .createSignedUrl(r.audio_path, 60 * 60 * 6);
-      out.push({
-        id: r.id,
-        title: r.title,
-        prompt: r.prompt,
-        url: signed?.signedUrl ?? null,
-        created_at: r.created_at,
-      });
-    }
-    return out;
-  });
-
 export const createThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -445,19 +381,11 @@ export const sendMessage = createServerFn({ method: "POST" })
     const hasImages = !!data.images && data.images.length > 0;
     const route = await routeRequest(data.content, hasImages);
     const isImage = route.mode === "IMAGE_GEN" || route.mode === "IMAGE_EDIT";
-    const isMusic = route.mode === "MUSIC_SHORT" || route.mode === "MUSIC_SONG";
-    const isMedia = isImage || isMusic;
 
-    if (isMedia && route.mode !== "IMAGE_GEN" && !isAdmin && usage.image_count >= usage.image_limit) {
-      return {
-        ok: false,
-        kind: "limit" as const,
-        message: isMusic
-          ? "Music limit reached. It resets every 5 hours."
-          : "Image limit reached. It resets every 5 hours.",
-      };
+    if (isImage && route.mode !== "IMAGE_GEN" && !isAdmin && usage.image_count >= usage.image_limit) {
+      return { ok: false, kind: "limit" as const, message: "Image limit reached. It resets every 5 hours." };
     }
-    if (!isMedia && !isAdmin && usage.text_count >= usage.text_limit) {
+    if (!isImage && !isAdmin && usage.text_count >= usage.text_limit) {
       return { ok: false, kind: "limit" as const, message: "Text limit reached. It will reset automatically." };
     }
 
@@ -476,8 +404,6 @@ export const sendMessage = createServerFn({ method: "POST" })
     let assistantContent = "";
     let imagePath: string | null = null;
     let signedImage: string | null = null;
-    let audioPath: string | null = null;
-    let signedAudio: string | null = null;
     let watermarked = false;
 
     async function storeImage(buf: ArrayBuffer) {
@@ -503,29 +429,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       await adm.from("usage").update({ text_count: usage.text_count + 1 }).eq("user_id", userId);
     }
 
-    if (isMusic) {
-      try {
-        await mediaDelay(isAdmin);
-        const tier = route.mode === "MUSIC_SONG" ? "song" : "short";
-        const { buf, mime } = await nizaMusic(route.prompt, tier);
-        const ext = mime.includes("mpeg") ? "mp3" : mime.includes("ogg") ? "ogg" : "wav";
-        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("generated-audio")
-          .upload(path, new Uint8Array(buf), { contentType: mime || "audio/wav" });
-        if (upErr) throw upErr;
-        audioPath = path;
-        const { data: signed } = await supabase.storage
-          .from("generated-audio")
-          .createSignedUrl(path, 60 * 60 * 6);
-        signedAudio = signed?.signedUrl ?? null;
-        assistantContent = tier === "song" ? "Here's your song:" : "Here's your track:";
-        if (!isAdmin) await bumpImage();
-      } catch (e) {
-        console.error("music gen failed:", e);
-        assistantContent = "Sorry, music generation is unavailable right now. Please try again later.";
-      }
-    } else if (route.mode === "IMAGE_EDIT") {
+    if (route.mode === "IMAGE_EDIT") {
       try {
         await mediaDelay(isAdmin);
         await storeImage(await editImage(data.content, data.images!));
@@ -638,9 +542,8 @@ export const sendMessage = createServerFn({ method: "POST" })
         role: "assistant",
         content: assistantContent,
         image_url: imagePath,
-        audio_url: audioPath,
         watermarked,
-        media_prompt: isMedia ? route.prompt : null,
+        media_prompt: isImage ? route.prompt : null,
       })
       .select("id, thread_id, role, content, image_url, audio_url, watermarked, edited, created_at")
       .single();
@@ -659,7 +562,6 @@ export const sendMessage = createServerFn({ method: "POST" })
       assistant: {
         ...(inserted as any),
         image_url: signedImage ?? (inserted as any)?.image_url ?? null,
-        audio_url: signedAudio ?? (inserted as any)?.audio_url ?? null,
       },
     };
   });
@@ -769,70 +671,6 @@ export const regenerateText = createServerFn({ method: "POST" })
       console.error("regen text failed:", e);
       return { ok: false, kind: "error" as const, message: "Regeneration failed. Please try again." };
     }
-  });
-
-export const generateMusic = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { prompt: string; tier?: "short" | "song" }) =>
-    z.object({ prompt: z.string().min(2).max(2000), tier: z.enum(["short", "song"]).optional() }).parse(d),
-  )
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    const profile = await loadProfile(supabase, userId);
-    const usage = await loadOrResetUsage(supabase, userId, profile.plan);
-    const isAdmin = await isAdminUser(supabase, userId, profile.email);
-    if (!isAdmin && usage.image_count >= usage.image_limit) {
-      return { ok: false, kind: "limit" as const, message: "Music limit reached. It resets every 5 hours." };
-    }
-    const route = await routeRequest(data.prompt, false);
-    const tier: "short" | "song" =
-      data.tier ?? (route.mode === "MUSIC_SONG" ? "song" : "short");
-    try {
-      await mediaDelay(isAdmin);
-      const { buf, mime } = await nizaMusic(data.prompt, tier);
-      const ext = mime.includes("mpeg") ? "mp3" : mime.includes("ogg") ? "ogg" : "wav";
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("generated-audio")
-        .upload(path, new Uint8Array(buf), { contentType: mime || "audio/wav" });
-      if (upErr) throw upErr;
-      const { data: signed } = await supabase.storage
-        .from("generated-audio")
-        .createSignedUrl(path, 60 * 60 * 6);
-      const title = deriveTitle(data.prompt);
-      const { data: row } = await supabase
-        .from("music_history")
-        .insert({ user_id: userId, title, prompt: data.prompt, audio_path: path })
-        .select("id, created_at")
-        .single();
-      if (!isAdmin) {
-        const adm = await adminClient();
-        await adm.from("usage").update({ image_count: usage.image_count + 1 }).eq("user_id", userId);
-      }
-      return {
-        ok: true,
-        kind: "track" as const,
-        track: {
-          id: row?.id ?? crypto.randomUUID(),
-          title,
-          prompt: data.prompt,
-          url: signed?.signedUrl ?? null,
-          created_at: row?.created_at ?? new Date().toISOString(),
-        },
-      };
-    } catch (e) {
-      console.error("music gen failed:", e);
-      return { ok: false, kind: "error" as const, message: "Music generation is unavailable right now." };
-    }
-  });
-
-export const deleteMusic = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context as any;
-    await supabase.from("music_history").delete().eq("user_id", userId).eq("id", data.id);
-    return { ok: true };
   });
 
 // ---------------- Puter image generation (client-side provider) ----------------

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Plus,
@@ -81,6 +82,7 @@ async function urlToDataUrl(url: string): Promise<{ dataUrl: string; bytes: numb
 }
 
 export function NizaApp() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const fetchThreads = useServerFn(listThreads);
   const fetchMe = useServerFn(getMe);
@@ -376,11 +378,9 @@ export function NizaApp() {
         tid = t.id;
       }
       const hasImages = payload.images.length > 0;
-      const isMusic = false; // music generation permanently removed
       const looksImage =
         payload.isEdit ||
         (!hasImages &&
-          !isMusic &&
           /\b(image|picture|photo|draw|paint|render|illustration|logo|wallpaper|poster|sketch|portrait|imagine|visualize)\b/i.test(
             payload.content,
           ));
@@ -394,7 +394,7 @@ export function NizaApp() {
         id: "p-" + crypto.randomUUID(),
         role: "assistant",
         content: "",
-        pending: isMusic ? "music" : looksImage ? "image" : "text",
+        pending: looksImage ? "image" : "text",
       };
       setOptimistic([userMsg, pending]);
       const res = await sendFn({
@@ -724,7 +724,7 @@ export function NizaApp() {
         onNewChat={() => createMut.mutate()}
         plan={plan}
         usage={usage ?? null}
-        onUpgrade={() => setUpgradeReason("both")}
+        onUpgrade={() => navigate({ to: "/plans" })}
       />
 
       {/* Main */}
