@@ -7,7 +7,7 @@ import { isReusableContent, shouldUseCopyCard } from "@/lib/intent";
 import { CopyCard } from "./CopyCard";
 import { CodeBlock } from "./CodeBlock";
 import { ImageViewer } from "./ImageViewer";
-export function ChatMessage({import { downloadImageWithWatermark } from "@/lib/watermark";
+import { downloadImageWithWatermark } from "@/lib/watermark";
 import { YouTubeEmbed } from "./YouTubeEmbed";
 
 export type UIMessage = {
@@ -22,7 +22,7 @@ export type UIMessage = {
   watermarked?: boolean;
   edited?: boolean;
   created_at?: string;
-  pending?: "text" | "image" | "music" | "video" | null;
+  pending?: "text" | "image" | "video" | null;
 };
 
 async function nativeShare(text: string, url?: string) {
@@ -77,7 +77,6 @@ export function ChatMessage({
   regenerating,
   onEditImage,
   onRegenerateText,
-  onSaveMusic,
   onLongPress,
   onEditVideo,
   imageGenerating,
@@ -92,7 +91,6 @@ export function ChatMessage({
   regenerating?: boolean;
   onEditImage?: (url: string) => void;
   onRegenerateText?: (id: string) => void;
-  onSaveMusic?: (id: string) => void;
   onLongPress?: (m: UIMessage) => void;
   onEditVideo?: (url: string) => void;
 }) {
@@ -158,9 +156,7 @@ export function ChatMessage({
           {...pressProps}
         >
           {/* ---- Pending states ---- */}
-          {message.pending === "music" ? (
-            <MusicPending />
-          ) : message.pending === "video" ? (
+          {message.pending === "video" ? (
             <div className="flex w-full max-w-sm items-center gap-2 rounded-2xl border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{message.content || "Editing your video…"}</span>
@@ -270,18 +266,6 @@ export function ChatMessage({
                       <Download className="h-3 w-3" />
                     </Action>
                   </div>
-                </div>
-              )}
-
-              {/* ---- Music ---- */}
-              {message.audio_url && (
-                <div className="mt-1 w-full">
-                  <MusicCard
-                    url={message.audio_url}
-                    onSave={onSaveMusic && isPersisted ? () => onSaveMusic(message.id) : undefined}
-                    onRegenerate={onRegenerate && isPersisted ? () => onRegenerate(message.id) : undefined}
-                    regenerating={regenerating}
-                  />
                 </div>
               )}
             </>
