@@ -309,9 +309,8 @@ export function ChatSidebar({ open, onClose, activeId, onSelect, onNewChat, plan
         {plan !== "premium" && (
           <div className="px-3 pb-2">
             <button
-              onClick={() => (onUpgrade ? onUpgrade() : startUpgrade())}
-              disabled={upgrading}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
+              onClick={() => (onUpgrade ? onUpgrade() : navigate({ to: "/plans" }))}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/15"
             >
               {upgrading ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
