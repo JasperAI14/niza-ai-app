@@ -385,7 +385,7 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (isImage && route.mode !== "IMAGE_GEN" && !isAdmin && usage.image_count >= usage.image_limit) {
       return { ok: false, kind: "limit" as const, message: "Image limit reached. It resets every 5 hours." };
     }
-    if (!isMedia && !isAdmin && usage.text_count >= usage.text_limit) {
+    if (!isImage && !isAdmin && usage.text_count >= usage.text_limit) {
       return { ok: false, kind: "limit" as const, message: "Text limit reached. It will reset automatically." };
     }
 
