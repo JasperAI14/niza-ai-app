@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageShell, Card } from "@/components/PageShell";
-import { Bot, Code2, ImageIcon, Music, Sparkles, Wand2 } from "lucide-react";
+import { Bot, Code2, ImageIcon, Sparkles, Wand2 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/profile/about")({
   head: () => ({
@@ -9,12 +9,12 @@ export const Route = createFileRoute("/_authenticated/profile/about")({
       {
         name: "description",
         content:
-          "Niza Prime AI is an all-in-one AI assistant for conversation, coding, images, editing and music, created by Paschal Onah Soromtochukwu (Jasper AI).",
+          "Niza Prime AI is an all-in-one AI assistant for conversation, coding, images and editing, created by Paschal Onah Soromtochukwu (Jasper AI).",
       },
       { property: "og:title", content: "About Niza Prime AI" },
       {
         property: "og:description",
-        content: "An all-in-one AI assistant for conversation, coding, images, editing and music.",
+        content: "An all-in-one AI assistant for conversation, coding, images and editing.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -28,7 +28,6 @@ const FEATURES = [
   { icon: Code2, title: "Coding help", text: "Write, explain, debug and review code in any language." },
   { icon: ImageIcon, title: "Image generation", text: "Describe a picture and Niza Prime AI creates it." },
   { icon: Wand2, title: "Image understanding and editing", text: "Upload a picture to analyse or change it." },
-  { icon: Music, title: "Music generation", text: "Create short pieces and full songs from a description." },
   { icon: Sparkles, title: "Everyday productivity", text: "Plan, summarise, draft and research faster." },
 ];
 
@@ -47,7 +46,7 @@ function About() {
             </div>
           </div>
           <p className="text-sm leading-relaxed text-muted-foreground">
-            Niza Prime AI brings conversation, coding help, image creation, image editing and music generation
+            Niza Prime AI brings conversation, coding help, image creation and image editing
             together in a single assistant. It is built to feel simple: describe what you need in your own words
             and Niza Prime AI works out the rest — no commands to memorise.
           </p>

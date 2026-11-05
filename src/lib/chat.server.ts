@@ -6,11 +6,9 @@
 //   Niza Chat 1.1   -> secondary conversational engine
 //   Niza Vision 2.0 -> image generation / editing
 //   Niza Vision 2.1 -> image generation fallback
-//   Niza Music 3.0  -> short instrumental pieces
-//   Niza Music 3.1  -> full songs
 import { NIZA_SYSTEM_PROMPT } from "@/lib/niza-knowledge";
 import { LIMITS, TEXT_RESET_MS, IMAGE_RESET_MS, type Plan } from "./limits";
-import { detectImageRequest, detectImageEdit, detectMusicRequest } from "./intent";
+import { detectImageRequest, detectImageEdit } from "./intent";
 import {
   buildClarification,
   detectWebSearchIntent,
@@ -650,70 +648,6 @@ export async function editImage(prompt: string, imageDataUrls: string[]): Promis
     }
   }
   throw lastErr ?? new Error("image editing failed");
-}
-
-// ---------------- Niza Music 3.0 / 3.1 ----------------
-function extractAudio(j: any): { buf: ArrayBuffer; mime: string } | null {
-  const pred = j?.predictions?.[0];
-  const predB64 = pred?.audioContent ?? pred?.bytesBase64Encoded ?? pred?.audio;
-  if (typeof predB64 === "string" && predB64.length > 100) {
-    return { buf: b64ToBuffer(predB64), mime: pred?.mimeType ?? "audio/wav" };
-  }
-  const parts = j?.candidates?.[0]?.content?.parts ?? [];
-  for (const p of parts) {
-    const inline = p?.inlineData ?? p?.inline_data;
-    if (inline?.data && String(inline.mimeType ?? inline.mime_type ?? "").startsWith("audio")) {
-      return { buf: b64ToBuffer(inline.data), mime: inline.mimeType ?? inline.mime_type };
-    }
-  }
-  return null;
-}
-
-export async function nizaMusic(
-  prompt: string,
-  tier: "short" | "song",
-): Promise<{ buf: ArrayBuffer; mime: string }> {
-  const key = process.env.GeminimusicAPI || process.env.GeminichatAPI || process.env.GEMINI_API_KEY;
-  if (!key) throw new Error("niza-music: no key");
-  const model = tier === "song" ? "lyria-3-pro-preview" : "lyria-3-preview";
-  const attempts: Array<{ url: string; body: any }> = [
-    {
-      url: `${GEMINI_BASE}/models/${model}:predict?key=${key}`,
-      body: {
-        instances: [{ prompt }],
-        parameters: { sampleCount: 1, ...(tier === "short" ? { durationSeconds: 30 } : {}) },
-      },
-    },
-    {
-      url: `${GEMINI_BASE}/models/${model}:generateContent?key=${key}`,
-      body: {
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseModalities: ["AUDIO"] },
-      },
-    },
-  ];
-  let lastErr: any = null;
-  for (const a of attempts) {
-    try {
-      const r = await fetch(a.url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(a.body),
-      });
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        throw new Error(`${model} ${r.status} ${t.slice(0, 160)}`);
-      }
-      const j = await r.json();
-      const out = extractAudio(j);
-      if (!out) throw new Error(`${model} returned no audio`);
-      return out;
-    } catch (e) {
-      lastErr = e;
-      console.error("[music] attempt failed:", (e as Error).message);
-    }
-  }
-  throw lastErr ?? new Error("niza-music failed");
 }
 
 // ---------------- titles ----------------

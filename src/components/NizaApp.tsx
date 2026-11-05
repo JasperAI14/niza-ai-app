@@ -378,11 +378,9 @@ export function NizaApp() {
         tid = t.id;
       }
       const hasImages = payload.images.length > 0;
-      const isMusic = false; // music generation permanently removed
       const looksImage =
         payload.isEdit ||
         (!hasImages &&
-          !isMusic &&
           /\b(image|picture|photo|draw|paint|render|illustration|logo|wallpaper|poster|sketch|portrait|imagine|visualize)\b/i.test(
             payload.content,
           ));
@@ -396,7 +394,7 @@ export function NizaApp() {
         id: "p-" + crypto.randomUUID(),
         role: "assistant",
         content: "",
-        pending: isMusic ? "music" : looksImage ? "image" : "text",
+        pending: looksImage ? "image" : "text",
       };
       setOptimistic([userMsg, pending]);
       const res = await sendFn({
