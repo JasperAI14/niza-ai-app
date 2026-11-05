@@ -82,6 +82,7 @@ async function urlToDataUrl(url: string): Promise<{ dataUrl: string; bytes: numb
 }
 
 export function NizaApp() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const fetchThreads = useServerFn(listThreads);
   const fetchMe = useServerFn(getMe);
