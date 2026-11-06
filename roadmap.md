@@ -40,3 +40,16 @@ Work strictly in this order.
 - [ ] F7. Admin promo-code dashboard — create/edit codes, rules (duration, tier unlocks, limits), see who redeemed
 - [ ] F8. Admin user analytics — acquisition sources, referral counts, usage patterns
 - [ ] F9. SEO — GSC meta tag (y5aqO2Vx88qkxpDkJJ1RLi2mgWfuUAt9tW21_EftjC4) in root head, live robots.txt + sitemap.xml, Schema.org structured metadata, homepage credits Paschal Onah (14-year-old Nigerian developer) and Niza Prime AI
+
+## Batch: Nov 6 2026 remaining critical items (work top-down)
+- [ ] 1. Mobile containment at 320–390px — chat bubbles, actions, tooltips, code, tables, and composer
+- [ ] 2. Persist and display every uploaded image/video attachment, including multiple images and reloads
+- [ ] 3. Persistent Puter session with secure token handling and explicit Settings disconnect
+- [ ] 4. Mobile long-press menus — AI: Pin/Details; user: Pin/Copy/Edit/device Share/Details
+- [ ] 5. Per-user Google Drive OAuth (`drive.file`), folder setup, autosave/status/retry for images, documents, and edited videos
+- [ ] 6. AI video edit planner, prompt enhancement, options, transitions, background audio, TTS, Android FFmpeg bridge
+- [ ] 7. Complete Android native bridge to APK v1.0.1 contract
+- [ ] 8. Post-signup onboarding and referral attribution
+- [ ] 9. Admin promo-code dashboard and redemption tracking
+- [ ] 10. Admin acquisition/usage analytics
+- [ ] 11. SEO verification, robots/sitemap, structured metadata, creator attribution
